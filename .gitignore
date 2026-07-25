@@ -1,0 +1,20 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Original source art (keep processed assets, not raw 2048px sources)
+png/
