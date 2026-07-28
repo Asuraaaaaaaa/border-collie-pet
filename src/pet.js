@@ -19,7 +19,7 @@ const ACTIONS = {
   tilt:   { frames: ["assets/tilt_0.png", "assets/tilt_1.png"], fps: 5 },
   sniff:  { frames: ["assets/sniff_0.png", "assets/sniff_1.png"], fps: 2 },
   scratch:{ frames: ["assets/scratch_0.png", "assets/scratch_1.png"], fps: 4 },
-  happy:  { frames: ["assets/happy_0.png", "assets/happy_1.png"], fps: 5 },
+  happy:  { frames: ["assets/tilt_0.png", "assets/tilt_1.png"], fps: 5 },
   drag:   { frames: ["assets/tilt_0.png"], fps: 1 },
 };
 
@@ -305,8 +305,12 @@ window.addEventListener("mouseup", (e) => {
 img.addEventListener("contextmenu", (e) => {
   e.preventDefault();
   ctxMenu.style.display = "block";
-  const mx = Math.min(e.clientX, W - 160);
-  const my = Math.min(e.clientY, W - 240);
+  // estimate menu height so we can flip it upward when near the bottom
+  const menuH = Math.min(ctxMenu.scrollHeight, 220);
+  const menuW = 150;
+  const mx = Math.max(0, Math.min(e.clientX, W - menuW - 4));
+  let my = e.clientY;
+  if (my + menuH > W - 4) my = Math.max(2, W - menuH - 4);
   ctxMenu.style.left = mx + "px";
   ctxMenu.style.top = my + "px";
 });
