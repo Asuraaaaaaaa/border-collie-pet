@@ -53,6 +53,13 @@ fn main() {
                 .build(app)?;
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // When the pet window is closed (e.g. via right-click menu "quit"),
+            // exit the entire app process.
+            if let tauri::WindowEvent::Destroyed = event {
+                window.app_handle().exit(0);
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

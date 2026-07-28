@@ -102,9 +102,27 @@ def key_white(im, tol=TOL):
     return out
 
 
+def strip_pink_halo(im):
+    """Remove the pink border glow around the dog.
+
+    The AI-generated art has a soft pink rim light on the dog's silhouette.
+    Detect pinkish semi-transparent edge pixels (R > B + 15, R > G + 5,
+    alpha < 255) and clear them so the sprite blends cleanly on any bg.
+    """
+    w, h = im.size
+    px = im.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if 0 < a < 255 and r > b + 15 and r > g + 5:
+                # pinkish anti-aliased edge -> fully transparent
+                px[x, y] = (r, g, b, 0)
+    return im
+
+
 def load_frame(path):
     im = Image.open(path).convert("RGB").resize((WORK, WORK), Image.LANCZOS)
-    return key_white(erase_watermark(im))
+    return strip_pink_halo(key_white(erase_watermark(im)))
 
 
 def union_bbox(imgs):
