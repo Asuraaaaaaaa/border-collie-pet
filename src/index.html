@@ -17,8 +17,8 @@
       position: absolute;
       left: 0;
       top: 0;
-      width: 240px;
-      height: 240px;
+      width: 160px;
+      height: 160px;
       object-fit: contain;
       cursor: grab;
     }
@@ -71,10 +71,17 @@
       border-radius: 8px;
       padding: 4px 0;
       min-width: 150px;
+      max-height: 220px;
+      overflow-y: auto;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
       z-index: 999;
       font: 13px -apple-system, "PingFang SC", sans-serif;
       color: #1a1a1a;
+    }
+    #ctxMenu::-webkit-scrollbar { width: 6px; }
+    #ctxMenu::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
     }
     #ctxMenu .item {
       padding: 6px 16px;
@@ -103,7 +110,7 @@
   <div id="bubble"></div>
   <div id="timer"></div>
   <div id="ctxMenu">
-    <div class="item" data-act="pomodoro">番茄钟</div>
+    <div class="item uncheck" data-act="pomodoro" id="pomodoroItem">番茄钟</div>
     <div class="item uncheck" data-act="water" id="waterItem">喝水提醒</div>
     <div class="sep"></div>
     <div class="item" data-act="walk">去散步</div>
@@ -118,6 +125,7 @@
     <div class="item" data-act="sleep">去睡觉</div>
     <div class="sep"></div>
     <div class="item" data-act="reset">回到原位</div>
+    <div class="item" data-act="resetSize">重置大小</div>
     <div class="sep"></div>
     <div class="item" data-act="quit">退出</div>
   </div>

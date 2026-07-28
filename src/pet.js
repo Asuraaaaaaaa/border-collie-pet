@@ -4,7 +4,11 @@ const T = window.__TAURI__;
 const win = T.window.getCurrentWindow();
 const LogicalPosition = T.window.LogicalPosition;
 
-const W = 240;
+const MIN_SIZE = 100;
+const MAX_SIZE = 320;
+const DEFAULT_SIZE = 160;
+let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
+const W = () => size;
 const TICK_MS = 33;
 
 const ACTIONS = {
@@ -37,6 +41,7 @@ const img = document.getElementById("pet");
 const bubble = document.getElementById("bubble");
 const timerEl = document.getElementById("timer");
 const ctxMenu = document.getElementById("ctxMenu");
+const pomodoroItem = document.getElementById("pomodoroItem");
 const waterItem = document.getElementById("waterItem");
 
 let state = "idle";
@@ -145,7 +150,7 @@ function tick() {
   if (state === "walk" || state === "run") {
     pos.x += dir * SPEEDS[state];
     if (pos.x <= 0) { pos.x = 0; dir = 1; img.classList.remove("flip"); }
-    if (pos.x >= bounds.w - W) { pos.x = bounds.w - W; dir = -1; img.classList.add("flip"); }
+    if (pos.x >= bounds.w - W()) { pos.x = bounds.w - W(); dir = -1; img.classList.add("flip"); }
     win.setPosition(new LogicalPosition(Math.round(pos.x), Math.round(pos.y)));
     if (stateTimer > stateDuration) enter(pickNextFromPhase());
   } else if (state === "idle") {
@@ -184,7 +189,10 @@ function startPomodoro() {
   pomodoro.active = true;
   pomodoro.phase = "work";
   pomodoro.remaining = 25 * 60;
+  pomodoro.lastTick = 0;
   lockedState = "lying";
+  pomodoroItem.classList.toggle("check", true);
+  pomodoroItem.classList.toggle("uncheck", false);
   enter("lying");
   timerEl.style.display = "block";
   timerEl.textContent = fmtTime(pomodoro.remaining);
@@ -203,6 +211,8 @@ function endPomodoroPhase() {
     pomodoro.active = false;
     lockedState = null;
     timerEl.style.display = "none";
+    pomodoroItem.classList.toggle("check", false);
+    pomodoroItem.classList.toggle("uncheck", true);
     showBubble("番茄钟结束,继续加油!", 3000);
     enter("idle");
   }
@@ -308,9 +318,9 @@ img.addEventListener("contextmenu", (e) => {
   // estimate menu height so we can flip it upward when near the bottom
   const menuH = Math.min(ctxMenu.scrollHeight, 220);
   const menuW = 150;
-  const mx = Math.max(0, Math.min(e.clientX, W - menuW - 4));
+  const mx = Math.max(0, Math.min(e.clientX, W() - menuW - 4));
   let my = e.clientY;
-  if (my + menuH > W - 4) my = Math.max(2, W - menuH - 4);
+  if (my + menuH > W() - 4) my = Math.max(2, W() - menuH - 4);
   ctxMenu.style.left = mx + "px";
   ctxMenu.style.top = my + "px";
 });
@@ -330,6 +340,8 @@ ctxMenu.addEventListener("click", (e) => {
         pomodoro.active = false;
         lockedState = null;
         timerEl.style.display = "none";
+        pomodoroItem.classList.toggle("check", false);
+        pomodoroItem.classList.toggle("uncheck", true);
         showBubble("番茄钟已取消", 2000);
         enter("idle");
       } else {
@@ -349,14 +361,37 @@ ctxMenu.addEventListener("click", (e) => {
     case "sleep":    lockedState = null; enter("lying"); break;
     case "reset":
       lockedState = null;
-      pos.x = Math.round(bounds.w - W - 120);
-      pos.y = Math.round(bounds.h - W - 90);
+      pos.x = Math.round(bounds.w - W() - 120);
+      pos.y = Math.round(bounds.h - W() - 90);
       win.setPosition(new LogicalPosition(pos.x, pos.y));
       enter("idle");
+      break;
+    case "resetSize":
+      setSize(DEFAULT_SIZE);
+      showBubble("已恢复默认大小", 2000);
       break;
     case "quit":     win.close(); break;
   }
 });
+
+// ---------- size control (mouse wheel) ----------
+function applySize() {
+  img.style.width = size + "px";
+  img.style.height = size + "px";
+  win.setSize(new T.window.LogicalSize(size, size)).catch(() => {});
+}
+
+function setSize(newSize) {
+  size = Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(newSize)));
+  localStorage.setItem("petSize", size);
+  applySize();
+}
+
+img.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const step = e.deltaY < 0 ? 16 : -16;
+  setSize(size + step);
+}, { passive: false });
 
 // ---------- init ----------
 async function init() {
@@ -364,8 +399,9 @@ async function init() {
   const sf = monitor.scaleFactor;
   bounds.w = monitor.size.width / sf;
   bounds.h = monitor.size.height / sf;
-  pos.x = Math.round(bounds.w - W - 120);
-  pos.y = Math.round(bounds.h - W - 90);
+  applySize();
+  pos.x = Math.round(bounds.w - W() - 120);
+  pos.y = Math.round(bounds.h - W() - 90);
   await win.setPosition(new LogicalPosition(pos.x, pos.y));
 
   const phase = getTimePhase();
