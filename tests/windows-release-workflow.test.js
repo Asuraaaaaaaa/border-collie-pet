@@ -124,6 +124,7 @@ test("uploads manually built NSIS installers as an artifact", () => {
 
   assert.equal(artifact.if, "github.event_name == 'workflow_dispatch'");
   assert.equal(artifact.uses, "actions/upload-artifact@v4");
+  assert.equal(artifact.with.name, "LinePuppy-Windows-x64-installer");
   assert.equal(artifact.with["if-no-files-found"], "error");
   assert.equal(
     artifact.with.path,
