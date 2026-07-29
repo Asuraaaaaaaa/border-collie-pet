@@ -45,7 +45,7 @@ fn main() {
                             "about" => {
                                 let _ = window.show();
                                 let _ = window.set_focus();
-                                let _ = window.open_devtools();
+                                let _ = window.eval(r#"window.alert("边牧桌宠 v0.3.0\n\n一只住在桌面上的小边牧。\n左键点击：互动\n按住拖拽：移动\n滚轮：调整大小\n右键：打开功能菜单");"#);
                             }
                             "quit" => app.exit(0),
                             _ => {}

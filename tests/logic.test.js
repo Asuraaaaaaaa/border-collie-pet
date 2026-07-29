@@ -190,6 +190,17 @@ test("returns the configured pomodoro pose unchanged", () => {
   assert.equal(pomodoroResumePose("idle"), "idle");
 });
 
+test("restores the configured pomodoro pose after a drag", () => {
+  const source = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+  const releaseStart = source.indexOf('window.addEventListener("mouseup"');
+  const releaseEnd = source.indexOf("// ---------- context menu", releaseStart);
+  const releasePath = source.slice(releaseStart, releaseEnd);
+
+  assert.match(releasePath, /pomodoroResumePose\(pomoConfig\.pose\)/);
+  assert.doesNotMatch(releasePath, /lockedState\s*=\s*"lying"/);
+  assert.doesNotMatch(releasePath, /enter\("lying"\)/);
+});
+
 test("switches listener mode and prevents local/global double counting", () => {
   let state = createKeyboardState();
   state = applyKeyboardStatus(state, {

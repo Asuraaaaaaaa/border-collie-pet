@@ -14,6 +14,7 @@ import {
   clampPetPosition,
   defaultPetPosition,
   monitorWorkAreaToLogical,
+  pomodoroResumePose,
 } from "./logic.js";
 
 const T = window.__TAURI__;
@@ -449,8 +450,9 @@ window.addEventListener("mouseup", async (e) => {
   resumeKeyboard();
   await applyWindowLayout();
   if (pomodoro.active && pomodoro.phase === "work") {
-    lockedState = "lying";
-    enter("lying");
+    const resumePose = pomodoroResumePose(pomoConfig.pose);
+    lockedState = resumePose;
+    enter(resumePose);
   } else {
     enter(moved ? "idle" : "happy");
   }
