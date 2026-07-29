@@ -7,6 +7,7 @@ import {
   applyKeyboardStatus,
   calculateKeyboardLayout,
   clampPetPosition,
+  countRecentKeyPresses,
   createKeyboardState,
   defaultPetPosition,
   monitorWorkAreaToLogical,
@@ -67,109 +68,94 @@ test("places the default pet relative to the current work-area origin", () => {
   );
 });
 
-test("places the keyboard on the right when it fits", () => {
+test("places the keyboard bubble above the pet when it fits", () => {
   const layout = calculateKeyboardLayout({
-    petPosition: { x: 100, y: 500 },
+    petPosition: { x: 500, y: 500 },
     petSize: 160,
-    panelSize: { width: 340, height: 220 },
+    panelSize: { width: 260, height: 170 },
     workArea: { x: 0, y: 0, width: 1440, height: 900 },
   });
 
-  assert.deepEqual(layout.windowPosition, { x: 100, y: 440 });
-  assert.deepEqual(layout.windowSize, { width: 500, height: 220 });
-  assert.deepEqual(layout.petOffset, { x: 0, y: 60 });
-  assert.deepEqual(layout.panelOffset, { x: 160, y: 0 });
-  assert.equal(layout.overlay, false);
-});
-
-test("places the keyboard on the left near the right edge", () => {
-  const petPosition = { x: 1200, y: 500 };
-  const layout = calculateKeyboardLayout({
-    petPosition,
-    petSize: 160,
-    panelSize: { width: 340, height: 220 },
-    workArea: { x: 0, y: 0, width: 1440, height: 900 },
-  });
-
-  assert.deepEqual(layout.windowPosition, { x: 860, y: 440 });
-  assert.deepEqual(layout.petOffset, { x: 340, y: 60 });
+  assert.equal(layout.placement, "above");
+  assert.deepEqual(layout.windowPosition, { x: 450, y: 322 });
+  assert.deepEqual(layout.windowSize, { width: 260, height: 338 });
+  assert.deepEqual(layout.petOffset, { x: 50, y: 178 });
   assert.deepEqual(layout.panelOffset, { x: 0, y: 0 });
-  assert.deepEqual(
-    {
-      x: layout.windowPosition.x + layout.petOffset.x,
-      y: layout.windowPosition.y + layout.petOffset.y,
-    },
-    petPosition,
-  );
-});
-
-test("bottom-aligns a 100px pet beside the fixed 220px panel", () => {
-  const layout = calculateKeyboardLayout({
-    petPosition: { x: 80, y: 400 },
-    petSize: 100,
-    panelSize: { width: 340, height: 220 },
-    workArea: { x: 0, y: 0, width: 800, height: 600 },
-  });
-
-  assert.deepEqual(layout.windowSize, { width: 440, height: 220 });
-  assert.deepEqual(layout.petOffset, { x: 0, y: 120 });
-  assert.deepEqual(layout.panelOffset, { x: 100, y: 0 });
+  assert.equal(layout.pointerOffset, 130);
   assert.equal(layout.overlay, false);
 });
 
-test("keeps a 320px pet and panel inside a supported work area", () => {
-  const workArea = { x: 0, y: 0, width: 800, height: 600 };
+test("positions the keyboard bubble against the pet's visible bounds", () => {
   const layout = calculateKeyboardLayout({
-    petPosition: { x: 470, y: 250 },
-    petSize: 320,
-    panelSize: { width: 340, height: 220 },
-    workArea,
+    petPosition: { x: 500, y: 500 },
+    petSize: 160,
+    petInsets: { top: 60, right: 8, bottom: 20, left: 8 },
+    panelSize: { width: 260, height: 170 },
+    workArea: { x: 0, y: 0, width: 1440, height: 900 },
   });
 
-  assert.deepEqual(layout.windowSize, { width: 660, height: 320 });
-  assert.equal(layout.panelOffset.y, 100);
-  assert.ok(layout.windowPosition.x >= workArea.x);
-  assert.ok(layout.windowPosition.x + layout.windowSize.width <= workArea.width);
+  assert.equal(layout.placement, "above");
+  assert.deepEqual(layout.windowPosition, { x: 450, y: 382 });
+  assert.deepEqual(layout.windowSize, { width: 260, height: 278 });
+  assert.deepEqual(layout.petOffset, { x: 50, y: 118 });
+  assert.deepEqual(layout.panelOffset, { x: 0, y: 0 });
+  assert.equal(layout.pointerOffset, 130);
+  assert.equal(layout.overlay, false);
 });
 
-test("uses overlay degradation below the supported work-area size", () => {
-  const workArea = { x: 0, y: 0, width: 640, height: 480 };
+test("places the keyboard bubble below the pet near the top edge", () => {
   const layout = calculateKeyboardLayout({
-    petPosition: { x: 300, y: 150 },
-    petSize: 320,
-    panelSize: { width: 340, height: 220 },
-    workArea,
+    petPosition: { x: 100, y: 10 },
+    petSize: 160,
+    panelSize: { width: 260, height: 170 },
+    workArea: { x: 0, y: 0, width: 1440, height: 900 },
   });
 
-  assert.equal(layout.overlay, true);
-  assert.equal(layout.windowSize.width, 640);
-  assert.ok(layout.panelOffset.x >= 0);
-  assert.ok(layout.panelOffset.x + 340 <= layout.windowSize.width);
-  assert.ok(layout.petOffset.x >= 0);
-  assert.ok(layout.petOffset.x + 320 <= layout.windowSize.width);
+  assert.equal(layout.placement, "below");
+  assert.deepEqual(layout.windowPosition, { x: 50, y: 10 });
+  assert.deepEqual(layout.windowSize, { width: 260, height: 338 });
+  assert.deepEqual(layout.petOffset, { x: 50, y: 0 });
+  assert.deepEqual(layout.panelOffset, { x: 0, y: 168 });
+  assert.equal(layout.pointerOffset, 130);
+  assert.equal(layout.overlay, false);
 });
 
-test("clamps an overlay layout against a negative monitor origin", () => {
+test("places the keyboard bubble beside the pet when vertical space is tight", () => {
+  const layout = calculateKeyboardLayout({
+    petPosition: { x: 100, y: 70 },
+    petSize: 160,
+    panelSize: { width: 260, height: 170 },
+    workArea: { x: 0, y: 0, width: 800, height: 300 },
+  });
+
+  assert.equal(layout.placement, "right");
+  assert.deepEqual(layout.windowPosition, { x: 100, y: 65 });
+  assert.deepEqual(layout.windowSize, { width: 428, height: 170 });
+  assert.deepEqual(layout.petOffset, { x: 0, y: 5 });
+  assert.deepEqual(layout.panelOffset, { x: 168, y: 0 });
+  assert.equal(layout.pointerOffset, 85);
+  assert.equal(layout.overlay, false);
+});
+
+test("keeps the bubble and pet inside a work area with a negative origin", () => {
   const workArea = { x: -1440, y: 20, width: 800, height: 600 };
   const layout = calculateKeyboardLayout({
-    petPosition: { x: -1220, y: 200 },
+    petPosition: { x: -1400, y: 200 },
     petSize: 320,
-    panelSize: { width: 340, height: 220 },
+    panelSize: { width: 260, height: 170 },
     workArea,
   });
 
-  assert.equal(layout.overlay, true);
+  assert.equal(layout.placement, "above");
+  assert.deepEqual(layout.windowPosition, { x: -1400, y: 22 });
+  assert.deepEqual(layout.windowSize, { width: 320, height: 498 });
+  assert.deepEqual(layout.petOffset, { x: 0, y: 178 });
+  assert.deepEqual(layout.panelOffset, { x: 30, y: 0 });
+  assert.equal(layout.pointerOffset, 130);
   assert.ok(layout.windowPosition.x >= workArea.x);
   assert.ok(
     layout.windowPosition.x + layout.windowSize.width
       <= workArea.x + workArea.width,
-  );
-  assert.deepEqual(
-    {
-      x: layout.windowPosition.x + layout.petOffset.x,
-      y: layout.windowPosition.y + layout.petOffset.y,
-    },
-    { x: -1220, y: 200 },
   );
 });
 
@@ -234,4 +220,89 @@ test("resets a work interval but preserves statistics across suspend and resume"
   assert.equal(state.total, 0);
   assert.deepEqual(state.keyCounts, {});
   assert.equal(state.mode, "local-fallback");
+});
+
+test("counts key presses from the rolling previous minute", () => {
+  assert.equal(
+    countRecentKeyPresses([39_999, 40_000, 40_001, 99_999], 100_000),
+    2,
+  );
+  assert.equal(countRecentKeyPresses([], 100_000), 0);
+});
+
+test("shows a keys-per-minute rate that refreshes while visible", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const keyboard = readFileSync(
+    new URL("../src/keyboard.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(html, /id="kbKpm">0 键\/分</);
+  assert.doesNotMatch(html, /WPM/);
+  assert.match(keyboard, /setInterval\(renderStatistics, 1000\)/);
+});
+
+test("uses macOS input monitoring permission for global key capture", () => {
+  const keyboardFrontend = readFileSync(
+    new URL("../src/keyboard.js", import.meta.url),
+    "utf8",
+  );
+  const keyboardNative = readFileSync(
+    new URL("../src-tauri/src/keyboard.rs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(keyboardNative, /CGPreflightListenEventAccess/);
+  assert.match(keyboardNative, /CGRequestListenEventAccess/);
+  assert.doesNotMatch(keyboardNative, /application_is_trusted_with_prompt/);
+  assert.match(
+    keyboardFrontend,
+    /input-monitoring-required[\s\S]*需要输入监控权限/,
+  );
+});
+
+test("keeps short pet speech compact and wraps long messages", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+  const bubbleStyles = html.slice(
+    html.indexOf("#bubble {"),
+    html.indexOf("#bubble::after"),
+  );
+
+  assert.match(bubbleStyles, /top:\s*4px/);
+  assert.match(bubbleStyles, /width:\s*max-content/);
+  assert.match(
+    bubbleStyles,
+    /max-width:\s*min\(200px,\s*calc\(100vw\s*-\s*16px\)\)/,
+  );
+  assert.match(bubbleStyles, /white-space:\s*pre-line/);
+  assert.match(bubbleStyles, /overflow-wrap:\s*anywhere/);
+  assert.match(bubbleStyles, /text-align:\s*center/);
+  assert.match(pet, /bubble\.style\.left\s*=.*layout\.petOffset\.x/);
+  assert.match(pet, /bubble\.style\.top\s*=.*layout\.petOffset\.y.*petInsets\.top/);
+});
+
+test("renders the simulated keyboard as a compact speech bubble", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const keyboard = readFileSync(
+    new URL("../src/keyboard.js", import.meta.url),
+    "utf8",
+  );
+  const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+  const timerStyles = html.slice(
+    html.indexOf("#timer"),
+    html.indexOf("#ctxMenu"),
+  );
+
+  assert.match(
+    keyboard,
+    /KEYBOARD_PANEL_SIZE\s*=\s*\{\s*width:\s*260,\s*height:\s*170\s*\}/,
+  );
+  assert.match(keyboard, /panel\.dataset\.placement\s*=\s*rect\.placement/);
+  assert.match(keyboard, /--pointer-offset/);
+  assert.match(html, /#kbPanel::after/);
+  assert.match(html, /#kbPanel\[data-placement="above"\]::after/);
+  assert.match(timerStyles, /white-space:\s*nowrap/);
+  assert.match(pet, /timerEl\.style\.left\s*=.*layout\.petOffset\.x/);
+  assert.match(pet, /timerEl\.style\.top\s*=.*layout\.petOffset\.y/);
 });

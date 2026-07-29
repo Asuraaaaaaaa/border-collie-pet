@@ -1,6 +1,7 @@
 // Border collie desktop pet — frame animation + behavior state machine
 // Features: pomodoro timer, water reminder, time awareness, battery guard
 import {
+  KEYBOARD_PANEL_SIZE,
   configureKeyboardLayout,
   getKeyboardSummary,
   hideKeyboard,
@@ -24,6 +25,11 @@ const LogicalPosition = T.window.LogicalPosition;
 const MIN_SIZE = 100;
 const MAX_SIZE = 320;
 const DEFAULT_SIZE = 160;
+const FOCUS_POSE_VISUAL_INSETS = {
+  lying: { top: 60, right: 8, bottom: 20, left: 8 },
+  sit: { top: 22, right: 13, bottom: 9, left: 34 },
+  idle: { top: 28, right: 12, bottom: 10, left: 25 },
+};
 let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
 let keyboardVisible = false;
 const W = () => size;
@@ -79,6 +85,7 @@ let dir = 1;
 let pos = { x: 0, y: 0 };
 let bounds = { x: 0, y: 0, width: 1280, height: 800 };
 let menuOpen = false;
+let menuLayout = null;
 const reportedWindowErrors = new Set();
 
 function reportWindowErrorOnce(operation, error) {
@@ -124,24 +131,48 @@ async function applyWindowLayout() {
   if (!keyboardVisible) {
     img.style.left = "0";
     img.style.top = "0";
+    bubble.style.left = "50%";
+    bubble.style.top = "4px";
+    timerEl.style.left = "auto";
+    timerEl.style.top = "4px";
+    timerEl.style.right = "4px";
+    timerEl.style.transform = "none";
     await setWindowSize(size, size);
     await setWindowPosition(pos);
     return;
   }
 
+  const insetScale = size / DEFAULT_SIZE;
+  const baseInsets = FOCUS_POSE_VISUAL_INSETS[pomoConfig.pose]
+    ?? FOCUS_POSE_VISUAL_INSETS.lying;
+  const petInsets = Object.fromEntries(
+    Object.entries(baseInsets).map(([edge, value]) => [
+      edge,
+      Math.round(value * insetScale),
+    ]),
+  );
   const layout = calculateKeyboardLayout({
     petPosition: pos,
     petSize: size,
-    panelSize: { width: 340, height: 220 },
+    petInsets,
+    panelSize: KEYBOARD_PANEL_SIZE,
     workArea: bounds,
   });
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
+  bubble.style.left = `${layout.petOffset.x + size / 2}px`;
+  bubble.style.top = `${layout.petOffset.y + petInsets.top - 4}px`;
+  timerEl.style.left = `${layout.petOffset.x + size - 4}px`;
+  timerEl.style.top = `${layout.petOffset.y + petInsets.top}px`;
+  timerEl.style.right = "auto";
+  timerEl.style.transform = "translateX(-100%)";
   setKeyboardPanelRect({
     x: layout.panelOffset.x,
     y: layout.panelOffset.y,
-    width: 340,
-    height: 220,
+    width: KEYBOARD_PANEL_SIZE.width,
+    height: KEYBOARD_PANEL_SIZE.height,
+    placement: layout.placement,
+    pointerOffset: layout.pointerOffset,
   });
   await setWindowSize(layout.windowSize.width, layout.windowSize.height);
   await setWindowPosition(layout.windowPosition);
@@ -462,6 +493,14 @@ window.addEventListener("mouseup", async (e) => {
 const MENU_W = 220;
 const MENU_H = 520;
 
+function positionContextMenu() {
+  if (!menuLayout) return;
+  const top = menuLayout.placeAbove
+    ? menuLayout.availableHeight - ctxMenu.offsetHeight
+    : menuLayout.petSize;
+  ctxMenu.style.top = `${Math.max(0, top)}px`;
+}
+
 async function openMenu() {
   suspendKeyboard();
   await applyWindowLayout();
@@ -477,7 +516,6 @@ async function openMenu() {
   const newW = Math.max(MENU_W, petSize);
   const newH = menuHeight + petSize;
   const newY = placeAbove ? pos.y - menuHeight : pos.y;
-  const menuTop = placeAbove ? 0 : petSize;
   const petTop = placeAbove ? menuHeight : 0;
   let newX = Math.round(pos.x - (newW - petSize) / 2);
   newX = Math.max(
@@ -494,8 +532,10 @@ async function openMenu() {
   ctxMenu.style.display = "block";
   ctxMenu.style.maxHeight = menuHeight + "px";
   ctxMenu.style.left = "4px";
-  ctxMenu.style.top = menuTop + "px";
+  ctxMenu.style.bottom = "auto";
   ctxMenu.style.width = (MENU_W - 8) + "px";
+  menuLayout = { placeAbove, availableHeight: menuHeight, petSize };
+  positionContextMenu();
 }
 
 function closeMenu() {
@@ -504,6 +544,7 @@ function closeMenu() {
   pomoPanel.style.display = "none";
   document.getElementById("interactPanel").style.display = "none";
   menuOpen = false;
+  menuLayout = null;
   resumeKeyboard();
   void applyWindowLayout();
 }
@@ -552,12 +593,14 @@ ctxMenu.addEventListener("click", (e) => {
           roundsVal.textContent = pomoConfig.rounds + " 轮";
           updatePresetActive(pomoConfig.work);
         }
+        positionContextMenu();
       }
       break;
     case "interact":
       // toggle the interaction sub-list
       const panel = document.getElementById("interactPanel");
       panel.style.display = panel.style.display === "none" ? "block" : "none";
+      positionContextMenu();
       break;
     case "water":    toggleWater(); break;
     case "walk":     lockedState = null; enter("walk"); break;

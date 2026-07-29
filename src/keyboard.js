@@ -1,18 +1,19 @@
 import {
   KEYBOARD_LAYOUT,
   applyKeyboardStatus,
+  countRecentKeyPresses,
   createKeyboardState,
   recordKeyboardEvent,
   resetKeyboardState,
   setKeyboardSuspended,
 } from "./logic.js";
 
-export const KEYBOARD_PANEL_SIZE = { width: 340, height: 220 };
+export const KEYBOARD_PANEL_SIZE = { width: 260, height: 170 };
 
 const panel = document.getElementById("kbPanel");
 const board = document.getElementById("kbBoard");
 const count = document.getElementById("kbCount");
-const wpm = document.getElementById("kbWpm");
+const kpm = document.getElementById("kbKpm");
 const topKeys = document.getElementById("kbTop5");
 const status = document.getElementById("kbStatus");
 const retry = document.getElementById("kbRetry");
@@ -23,6 +24,7 @@ let requestedVisible = false;
 let layoutHandler = () => {};
 let listenersReadyPromise = null;
 let listenerStartPromise = null;
+let statisticsTimer = null;
 
 function getTauri() {
   return window.__TAURI__;
@@ -52,10 +54,10 @@ function renderStatistics() {
   const now = Date.now();
   keyboardState = {
     ...keyboardState,
-    recentTimes: keyboardState.recentTimes.filter((time) => now - time < 5000),
+    recentTimes: keyboardState.recentTimes.filter((time) => now - time < 60_000),
   };
   count.textContent = `${keyboardState.total} 键`;
-  wpm.textContent = `${Math.round(keyboardState.recentTimes.length * 12 / 5)} WPM`;
+  kpm.textContent = `${countRecentKeyPresses(keyboardState.recentTimes, now)} 键/分`;
 
   const entries = Object.entries(keyboardState.keyCounts)
     .sort((left, right) => right[1] - left[1])
@@ -68,10 +70,20 @@ function renderStatistics() {
     item.append(displayCode(code));
     const bar = document.createElement("span");
     bar.className = "bar";
-    bar.style.width = `${Math.round(keyCount / maximum * 40)}px`;
+    bar.style.width = `${Math.round(keyCount / maximum * 24)}px`;
     item.appendChild(bar);
     topKeys.appendChild(item);
   }
+}
+
+function startStatisticsRefresh() {
+  clearInterval(statisticsTimer);
+  statisticsTimer = setInterval(renderStatistics, 1000);
+}
+
+function stopStatisticsRefresh() {
+  clearInterval(statisticsTimer);
+  statisticsTimer = null;
 }
 
 function renderStatus() {
@@ -81,11 +93,13 @@ function renderStatus() {
     return;
   }
 
-  status.textContent = keyboardState.reason === "permission-required"
-    ? "窗口监听 · 需要辅助功能权限"
-    : keyboardState.reason === "listener-error"
-      ? "窗口监听 · 全局监听已停止"
-      : "窗口监听";
+  status.textContent = keyboardState.reason === "input-monitoring-required"
+    ? "窗口监听 · 需要输入监控权限"
+    : keyboardState.reason === "permission-required"
+      ? "窗口监听 · 需要系统权限"
+      : keyboardState.reason === "listener-error"
+        ? "窗口监听 · 全局监听已停止"
+        : "窗口监听";
   retry.hidden = !keyboardState.reason;
 }
 
@@ -159,6 +173,8 @@ export function setKeyboardPanelRect(rect) {
   panel.style.top = `${rect.y}px`;
   panel.style.width = `${rect.width}px`;
   panel.style.height = `${rect.height}px`;
+  panel.dataset.placement = rect.placement;
+  panel.style.setProperty("--pointer-offset", `${rect.pointerOffset}px`);
 }
 
 export function showKeyboard({ reset = true } = {}) {
@@ -167,6 +183,7 @@ export function showKeyboard({ reset = true } = {}) {
   if (reset) keyboardState = resetKeyboardState(keyboardState);
   panel.style.display = "block";
   renderStatistics();
+  startStatisticsRefresh();
   renderStatus();
   layoutHandler(true, KEYBOARD_PANEL_SIZE);
   void startKeyboardListener();
@@ -174,6 +191,7 @@ export function showKeyboard({ reset = true } = {}) {
 
 export function hideKeyboard() {
   requestedVisible = false;
+  stopStatisticsRefresh();
   panel.style.display = "none";
   layoutHandler(false, KEYBOARD_PANEL_SIZE);
 }
@@ -181,6 +199,7 @@ export function hideKeyboard() {
 export function suspendKeyboard() {
   if (!requestedVisible) return;
   keyboardState = setKeyboardSuspended(keyboardState, true);
+  stopStatisticsRefresh();
   panel.style.display = "none";
   layoutHandler(false, KEYBOARD_PANEL_SIZE);
 }
@@ -190,6 +209,7 @@ export function resumeKeyboard() {
   keyboardState = setKeyboardSuspended(keyboardState, false);
   panel.style.display = "block";
   renderStatistics();
+  startStatisticsRefresh();
   renderStatus();
   layoutHandler(true, KEYBOARD_PANEL_SIZE);
   void startKeyboardListener();

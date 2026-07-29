@@ -16,7 +16,7 @@ rdev = "0.5"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
 core-graphics = "0.25"
-macos-accessibility-client = "0.0.2"
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["CGEvent"] }
 
 [profile.release]
 panic = "abort"

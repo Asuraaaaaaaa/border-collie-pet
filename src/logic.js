@@ -75,59 +75,124 @@ export function defaultPetPosition(workArea, petSize, margins = {}) {
 export function calculateKeyboardLayout({
   petPosition,
   petSize,
+  petInsets = {},
   panelSize,
   workArea,
+  gap = 8,
 }) {
-  const combinedWidth = petSize + panelSize.width;
+  const leftEdge = workArea.x;
   const rightEdge = workArea.x + workArea.width;
+  const topEdge = workArea.y;
   const bottomEdge = workArea.y + workArea.height;
-  const fitsRight = petPosition.x + combinedWidth <= rightEdge;
-  const fitsLeft = petPosition.x - panelSize.width >= workArea.x;
-  const supportedArea = workArea.width >= 800 && workArea.height >= 600;
-  const overlay = !supportedArea || (!fitsRight && !fitsLeft);
-  const panelOnRight = fitsRight || (!fitsLeft && !overlay);
-  const windowSize = {
-    width: overlay ? Math.min(combinedWidth, workArea.width) : combinedWidth,
-    height: Math.min(Math.max(petSize, panelSize.height), workArea.height),
+  const visiblePet = {
+    left: petPosition.x + (petInsets.left ?? 0),
+    right: petPosition.x + petSize - (petInsets.right ?? 0),
+    top: petPosition.y + (petInsets.top ?? 0),
+    bottom: petPosition.y + petSize - (petInsets.bottom ?? 0),
   };
-  const desiredX = overlay
-    ? petPosition.x - (windowSize.width - petSize) / 2
-    : panelOnRight
-      ? petPosition.x
-      : petPosition.x - panelSize.width;
-  const desiredY = petPosition.y + petSize - windowSize.height;
+  const visiblePetCenter = {
+    x: (visiblePet.left + visiblePet.right) / 2,
+    y: (visiblePet.top + visiblePet.bottom) / 2,
+  };
+  const spaces = {
+    above: visiblePet.top - topEdge,
+    below: bottomEdge - visiblePet.bottom,
+    right: rightEdge - visiblePet.right,
+    left: visiblePet.left - leftEdge,
+  };
+  const requiredSpace = {
+    above: panelSize.height + gap,
+    below: panelSize.height + gap,
+    right: panelSize.width + gap,
+    left: panelSize.width + gap,
+  };
+  const placementOrder = ["above", "below", "right", "left"];
+  let placement = placementOrder.find(
+    (candidate) => spaces[candidate] >= requiredSpace[candidate],
+  );
+  if (!placement) {
+    placement = placementOrder.reduce(
+      (best, candidate) => spaces[candidate] > spaces[best] ? candidate : best,
+      placementOrder[0],
+    );
+  }
+
+  const centeredPanelX = visiblePetCenter.x - panelSize.width / 2;
+  const centeredPanelY = visiblePetCenter.y - panelSize.height / 2;
+  const panelPosition = {
+    x: placement === "right"
+      ? visiblePet.right + gap
+      : placement === "left"
+        ? visiblePet.left - panelSize.width - gap
+        : centeredPanelX,
+    y: placement === "below"
+      ? visiblePet.bottom + gap
+      : placement === "above"
+        ? visiblePet.top - panelSize.height - gap
+        : centeredPanelY,
+  };
+  panelPosition.x = clamp(
+    panelPosition.x,
+    leftEdge,
+    rightEdge - panelSize.width,
+  );
+  panelPosition.y = clamp(
+    panelPosition.y,
+    topEdge,
+    bottomEdge - panelSize.height,
+  );
+
   const windowPosition = {
-    x: clamp(desiredX, workArea.x, rightEdge - windowSize.width),
-    y: clamp(desiredY, workArea.y, bottomEdge - windowSize.height),
+    x: Math.min(petPosition.x, panelPosition.x),
+    y: Math.min(petPosition.y, panelPosition.y),
+  };
+  const windowSize = {
+    width: Math.max(
+      petPosition.x + petSize,
+      panelPosition.x + panelSize.width,
+    ) - windowPosition.x,
+    height: Math.max(
+      petPosition.y + petSize,
+      panelPosition.y + panelSize.height,
+    ) - windowPosition.y,
   };
   const petOffset = {
     x: petPosition.x - windowPosition.x,
     y: petPosition.y - windowPosition.y,
   };
   const panelOffset = {
-    x: overlay
-      ? clamp(
-          petOffset.x + petSize,
-          0,
-          windowSize.width - panelSize.width,
-        )
-      : panelOnRight
-        ? petOffset.x + petSize
-        : 0,
-    y: Math.max(0, windowSize.height - panelSize.height),
+    x: panelPosition.x - windowPosition.x,
+    y: panelPosition.y - windowPosition.y,
   };
+  const pointerOffset = placement === "above" || placement === "below"
+    ? clamp(
+        visiblePetCenter.x - panelPosition.x,
+        18,
+        panelSize.width - 18,
+      )
+    : clamp(
+        visiblePetCenter.y - panelPosition.y,
+        18,
+        panelSize.height - 18,
+      );
 
   return {
     windowPosition,
     windowSize,
     petOffset,
     panelOffset,
-    overlay,
+    placement,
+    pointerOffset,
+    overlay: spaces[placement] < requiredSpace[placement],
   };
 }
 
 export function pomodoroResumePose(configuredPose) {
   return configuredPose;
+}
+
+export function countRecentKeyPresses(recentTimes, now = Date.now()) {
+  return recentTimes.filter((time) => now - time < 60_000).length;
 }
 
 export function createKeyboardState() {

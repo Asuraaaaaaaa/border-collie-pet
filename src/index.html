@@ -28,16 +28,22 @@
     #bubble {
       position: absolute;
       display: none;
-      top: -8px;
+      top: 4px;
       left: 50%;
       transform: translateX(-50%);
+      width: max-content;
+      max-width: min(200px, calc(100vw - 16px));
       background: rgba(255, 255, 255, 0.97);
       border: 1px solid rgba(0, 0, 0, 0.1);
       border-radius: 10px;
-      padding: 5px 12px;
+      padding: 6px 10px;
+      box-sizing: border-box;
       font: 12px -apple-system, "PingFang SC", sans-serif;
+      line-height: 1.35;
       color: #1a1a1a;
-      white-space: nowrap;
+      text-align: center;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
       z-index: 100;
     }
@@ -61,6 +67,7 @@
       padding: 2px 7px;
       font: 11px -apple-system, monospace;
       color: #fff;
+      white-space: nowrap;
       z-index: 100;
     }
     #ctxMenu {
@@ -157,39 +164,78 @@
       position: fixed;
       top: 0;
       left: 0;
-      width: 340px;
-      height: 220px;
-      background: rgba(30, 30, 35, 0.95);
-      border-radius: 10px 0 0 10px;
-      padding: 8px;
+      width: 260px;
+      height: 170px;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid rgba(32, 38, 48, 0.12);
+      border-radius: 12px;
+      padding: 7px;
       box-sizing: border-box;
-      font: 10px -apple-system, "PingFang SC", monospace;
-      color: #ddd;
-      overflow: hidden;
+      font: 9px -apple-system, "PingFang SC", monospace;
+      color: #30343b;
+      overflow: visible;
       z-index: 50;
+      box-shadow: 0 5px 18px rgba(24, 32, 44, 0.18);
+      --pointer-offset: 50%;
+    }
+    #kbPanel::after {
+      content: "";
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.98);
+      transform: rotate(45deg);
+    }
+    #kbPanel[data-placement="above"]::after {
+      left: var(--pointer-offset);
+      bottom: -6px;
+      margin-left: -5px;
+      border-right: 1px solid rgba(32, 38, 48, 0.12);
+      border-bottom: 1px solid rgba(32, 38, 48, 0.12);
+    }
+    #kbPanel[data-placement="below"]::after {
+      left: var(--pointer-offset);
+      top: -6px;
+      margin-left: -5px;
+      border-left: 1px solid rgba(32, 38, 48, 0.12);
+      border-top: 1px solid rgba(32, 38, 48, 0.12);
+    }
+    #kbPanel[data-placement="right"]::after {
+      left: -6px;
+      top: var(--pointer-offset);
+      margin-top: -5px;
+      border-left: 1px solid rgba(32, 38, 48, 0.12);
+      border-bottom: 1px solid rgba(32, 38, 48, 0.12);
+    }
+    #kbPanel[data-placement="left"]::after {
+      right: -6px;
+      top: var(--pointer-offset);
+      margin-top: -5px;
+      border-right: 1px solid rgba(32, 38, 48, 0.12);
+      border-top: 1px solid rgba(32, 38, 48, 0.12);
     }
     #kbStats {
       display: flex;
       justify-content: space-between;
-      padding: 2px 6px 6px;
-      font-size: 12px;
-      color: #4a9eff;
-      font-weight: 500;
+      padding: 0 4px 5px;
+      font-size: 11px;
+      color: #1677c8;
+      font-weight: 600;
     }
-    #kbBoard { display: flex; flex-direction: column; gap: 2px; }
-    .kb-row { display: flex; gap: 2px; }
+    #kbBoard { display: flex; flex-direction: column; gap: 1px; }
+    .kb-row { display: flex; gap: 1px; }
     .kb-key {
       flex: 1;
-      height: 18px;
+      height: 14px;
       min-width: 0;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(35, 43, 55, 0.06);
+      border: 1px solid rgba(35, 43, 55, 0.1);
       border-radius: 3px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 9px;
-      color: #aaa;
+      font-size: 8px;
+      color: #626973;
       transition: background 0.05s;
       box-sizing: border-box;
     }
@@ -203,18 +249,18 @@
       box-shadow: 0 0 8px rgba(74, 158, 255, 0.6);
     }
     #kbTop5 {
-      height: 20px;
-      padding: 4px 6px 2px;
+      height: 17px;
+      padding: 3px 4px 1px;
       box-sizing: border-box;
       font-size: 10px;
-      color: #888;
+      color: #747b85;
       white-space: nowrap;
       overflow: hidden;
     }
     #kbTop5 .hot-key {
       display: inline-block;
-      margin-right: 8px;
-      color: #ccc;
+      margin-right: 6px;
+      color: #4d5560;
     }
     #kbTop5 .hot-key .bar {
       display: inline-block;
@@ -225,15 +271,15 @@
       margin-left: 3px;
     }
     #kbStatusRow {
-      height: 20px;
+      height: 17px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 6px;
-      padding: 0 6px;
+      padding: 0 4px;
       box-sizing: border-box;
-      color: #aaa;
-      font-size: 10px;
+      color: #737b86;
+      font-size: 9px;
       white-space: nowrap;
     }
     #kbStatus {
@@ -243,11 +289,11 @@
     }
     #kbRetry {
       flex: none;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid rgba(35, 43, 55, 0.16);
       border-radius: 4px;
-      background: rgba(255,255,255,0.08);
-      color: #ddd;
-      padding: 2px 7px;
+      background: rgba(35, 43, 55, 0.06);
+      color: #4d5560;
+      padding: 1px 6px;
       font: inherit;
       cursor: pointer;
     }
@@ -260,7 +306,7 @@
   <div id="kbPanel" style="display:none">
     <div id="kbStats">
       <span id="kbCount">0 键</span>
-      <span id="kbWpm">0 WPM</span>
+      <span id="kbKpm">0 键/分</span>
     </div>
     <div id="kbBoard"></div>
     <div id="kbTop5"></div>

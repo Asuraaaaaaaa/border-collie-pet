@@ -6,6 +6,16 @@ use std::sync::{
 use tauri::Emitter;
 
 #[cfg(target_os = "macos")]
+fn macos_input_monitoring_is_trusted(request_if_needed: bool) -> bool {
+    use objc2_core_graphics::{
+        CGPreflightListenEventAccess, CGRequestListenEventAccess,
+    };
+
+    CGPreflightListenEventAccess()
+        || (request_if_needed && CGRequestListenEventAccess())
+}
+
+#[cfg(target_os = "macos")]
 fn macos_keycode_to_code(keycode: u16) -> Option<&'static str> {
     match keycode {
         0 => Some("KeyA"),
@@ -326,8 +336,8 @@ pub fn start_keyboard_listener(
     state: tauri::State<'_, KeyboardListenerState>,
 ) -> KeyboardStatus {
     #[cfg(target_os = "macos")]
-    if !macos_accessibility_client::accessibility::application_is_trusted_with_prompt() {
-        return KeyboardStatus::fallback("permission-required");
+    if !macos_input_monitoring_is_trusted(true) {
+        return KeyboardStatus::fallback("input-monitoring-required");
     }
 
     if !state.claim_start() {
