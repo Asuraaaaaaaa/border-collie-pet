@@ -5,6 +5,173 @@ use std::sync::{
 
 use tauri::Emitter;
 
+#[cfg(target_os = "macos")]
+fn macos_keycode_to_code(keycode: u16) -> Option<&'static str> {
+    match keycode {
+        0 => Some("KeyA"),
+        1 => Some("KeyS"),
+        2 => Some("KeyD"),
+        3 => Some("KeyF"),
+        4 => Some("KeyH"),
+        5 => Some("KeyG"),
+        6 => Some("KeyZ"),
+        7 => Some("KeyX"),
+        8 => Some("KeyC"),
+        9 => Some("KeyV"),
+        11 => Some("KeyB"),
+        12 => Some("KeyQ"),
+        13 => Some("KeyW"),
+        14 => Some("KeyE"),
+        15 => Some("KeyR"),
+        16 => Some("KeyY"),
+        17 => Some("KeyT"),
+        18 => Some("Digit1"),
+        19 => Some("Digit2"),
+        20 => Some("Digit3"),
+        21 => Some("Digit4"),
+        22 => Some("Digit6"),
+        23 => Some("Digit5"),
+        24 => Some("Equal"),
+        25 => Some("Digit9"),
+        26 => Some("Digit7"),
+        27 => Some("Minus"),
+        28 => Some("Digit8"),
+        29 => Some("Digit0"),
+        30 => Some("BracketRight"),
+        31 => Some("KeyO"),
+        32 => Some("KeyU"),
+        33 => Some("BracketLeft"),
+        34 => Some("KeyI"),
+        35 => Some("KeyP"),
+        36 => Some("Enter"),
+        37 => Some("KeyL"),
+        38 => Some("KeyJ"),
+        39 => Some("Quote"),
+        40 => Some("KeyK"),
+        41 => Some("Semicolon"),
+        42 => Some("Backslash"),
+        43 => Some("Comma"),
+        44 => Some("Slash"),
+        45 => Some("KeyN"),
+        46 => Some("KeyM"),
+        47 => Some("Period"),
+        48 => Some("Tab"),
+        49 => Some("Space"),
+        50 => Some("Backquote"),
+        51 => Some("Backspace"),
+        53 => Some("Escape"),
+        56 => Some("ShiftLeft"),
+        57 => Some("CapsLock"),
+        58 => Some("AltLeft"),
+        59 => Some("ControlLeft"),
+        60 => Some("ShiftRight"),
+        61 => Some("AltRight"),
+        62 => Some("ControlRight"),
+        65 => Some("NumpadDecimal"),
+        67 => Some("NumpadMultiply"),
+        69 => Some("NumpadAdd"),
+        75 => Some("NumpadDivide"),
+        76 => Some("NumpadEnter"),
+        78 => Some("NumpadSubtract"),
+        82 => Some("Numpad0"),
+        83 => Some("Numpad1"),
+        84 => Some("Numpad2"),
+        85 => Some("Numpad3"),
+        86 => Some("Numpad4"),
+        87 => Some("Numpad5"),
+        88 => Some("Numpad6"),
+        89 => Some("Numpad7"),
+        91 => Some("Numpad8"),
+        92 => Some("Numpad9"),
+        96 => Some("F5"),
+        97 => Some("F6"),
+        98 => Some("F7"),
+        99 => Some("F3"),
+        100 => Some("F8"),
+        101 => Some("F9"),
+        103 => Some("F11"),
+        109 => Some("F10"),
+        111 => Some("F12"),
+        115 => Some("Home"),
+        116 => Some("PageUp"),
+        117 => Some("Delete"),
+        118 => Some("F4"),
+        119 => Some("End"),
+        120 => Some("F2"),
+        121 => Some("PageDown"),
+        122 => Some("F1"),
+        123 => Some("ArrowLeft"),
+        124 => Some("ArrowRight"),
+        125 => Some("ArrowDown"),
+        126 => Some("ArrowUp"),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_modifier_is_pressed(
+    keycode: u16,
+    flags: core_graphics::event::CGEventFlags,
+) -> bool {
+    use core_graphics::event::CGEventFlags;
+
+    match keycode {
+        56 | 60 => flags.contains(CGEventFlags::CGEventFlagShift),
+        57 => true,
+        58 | 61 => flags.contains(CGEventFlags::CGEventFlagAlternate),
+        59 | 62 => flags.contains(CGEventFlags::CGEventFlagControl),
+        _ => false,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn listen_for_keyboard_events(app: tauri::AppHandle) -> Result<(), String> {
+    use core_foundation::runloop::CFRunLoop;
+    use core_graphics::event::{
+        CallbackResult, CGEventTap, CGEventTapLocation, CGEventTapOptions,
+        CGEventTapPlacement, CGEventType, EventField,
+    };
+
+    CGEventTap::with_enabled(
+        CGEventTapLocation::HID,
+        CGEventTapPlacement::HeadInsertEventTap,
+        CGEventTapOptions::ListenOnly,
+        vec![CGEventType::KeyDown, CGEventType::FlagsChanged],
+        move |_proxy, event_type, event| {
+            let keycode =
+                event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE) as u16;
+            let is_press = match event_type {
+                CGEventType::KeyDown => true,
+                CGEventType::FlagsChanged => {
+                    macos_modifier_is_pressed(keycode, event.get_flags())
+                }
+                _ => false,
+            };
+
+            if is_press {
+                if let Some(code) = macos_keycode_to_code(keycode) {
+                    let _ = app.emit("global-keydown", code);
+                }
+            }
+            CallbackResult::Keep
+        },
+        CFRunLoop::run_current,
+    )
+    .map_err(|()| "could not create macOS keyboard event tap".to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn listen_for_keyboard_events(app: tauri::AppHandle) -> Result<(), String> {
+    rdev::listen(move |event| {
+        if let rdev::EventType::KeyPress(key) = event.event_type {
+            if let Some(code) = key_to_code(&key) {
+                let _ = app.emit("global-keydown", code);
+            }
+        }
+    })
+    .map_err(|error| format!("{error:?}"))
+}
+
 pub fn key_to_code(key: &rdev::Key) -> Option<&'static str> {
     use rdev::Key::*;
 
@@ -169,18 +336,11 @@ pub fn start_keyboard_listener(
 
     let listener_state = state.inner().clone();
     std::thread::spawn(move || {
-        let event_app = app.clone();
-        let result = rdev::listen(move |event| {
-            if let rdev::EventType::KeyPress(key) = event.event_type {
-                if let Some(code) = key_to_code(&key) {
-                    let _ = event_app.emit("global-keydown", code);
-                }
-            }
-        });
+        let result = listen_for_keyboard_events(app.clone());
 
         match result {
             Ok(()) => eprintln!("global keyboard listener stopped unexpectedly"),
-            Err(error) => eprintln!("global keyboard listener error: {error:?}"),
+            Err(error) => eprintln!("global keyboard listener error: {error}"),
         }
         let status = listener_state.listener_error();
         let _ = app.emit("keyboard-listener-status", status);
@@ -339,5 +499,27 @@ mod tests {
             serde_json::to_value(KeyboardStatus::fallback("permission-required")).unwrap(),
             json!({ "status": "fallback", "reason": "permission-required" })
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn maps_macos_virtual_keycodes_without_character_translation() {
+        use super::macos_keycode_to_code;
+
+        let cases = [
+            (0, "KeyA"),
+            (18, "Digit1"),
+            (36, "Enter"),
+            (56, "ShiftLeft"),
+            (61, "AltRight"),
+            (82, "Numpad0"),
+            (123, "ArrowLeft"),
+            (126, "ArrowUp"),
+        ];
+
+        for (keycode, expected) in cases {
+            assert_eq!(macos_keycode_to_code(keycode), Some(expected));
+        }
+        assert_eq!(macos_keycode_to_code(u16::MAX), None);
     }
 }
