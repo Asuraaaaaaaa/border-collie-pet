@@ -33,6 +33,7 @@ test('reports cargo and Tauri version mismatches', () => {
 });
 
 test('rejects tags without a leading version suffix', () => {
+  assert.throws(() => validateReleaseTag(undefined, {}), /tag is required/);
   assert.throws(() => validateReleaseTag('0.3.0', {}), /must start with v/);
   assert.throws(() => validateReleaseTag('v', {}), /must include a version/);
 });

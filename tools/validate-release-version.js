@@ -45,6 +45,10 @@ export function readProjectVersions(projectRoot = defaultProjectRoot) {
 }
 
 export function validateReleaseTag(tag, projectVersions) {
+  if (!tag) {
+    throw new Error('Release tag is required');
+  }
+
   if (!tag.startsWith('v')) {
     throw new Error('Release tag must start with v');
   }
