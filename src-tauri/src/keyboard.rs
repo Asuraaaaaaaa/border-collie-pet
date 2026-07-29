@@ -1,3 +1,10 @@
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+
+use tauri::Emitter;
+
 pub fn key_to_code(key: &rdev::Key) -> Option<&'static str> {
     use rdev::Key::*;
 
@@ -102,10 +109,91 @@ pub fn key_to_code(key: &rdev::Key) -> Option<&'static str> {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct KeyboardListenerState {
+    started: Arc<AtomicBool>,
+}
+
+impl KeyboardListenerState {
+    fn claim_start(&self) -> bool {
+        self.started
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    fn release(&self) {
+        self.started.store(false, Ordering::Release);
+    }
+
+    fn listener_error(&self) -> KeyboardStatus {
+        self.release();
+        KeyboardStatus::fallback("listener-error")
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct KeyboardStatus {
+    status: &'static str,
+    reason: Option<&'static str>,
+}
+
+impl KeyboardStatus {
+    fn active() -> Self {
+        Self {
+            status: "active",
+            reason: None,
+        }
+    }
+
+    fn fallback(reason: &'static str) -> Self {
+        Self {
+            status: "fallback",
+            reason: Some(reason),
+        }
+    }
+}
+
+#[tauri::command]
+pub fn start_keyboard_listener(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, KeyboardListenerState>,
+) -> KeyboardStatus {
+    #[cfg(target_os = "macos")]
+    if !macos_accessibility_client::accessibility::application_is_trusted_with_prompt() {
+        return KeyboardStatus::fallback("permission-required");
+    }
+
+    if !state.claim_start() {
+        return KeyboardStatus::active();
+    }
+
+    let listener_state = state.inner().clone();
+    std::thread::spawn(move || {
+        let event_app = app.clone();
+        let result = rdev::listen(move |event| {
+            if let rdev::EventType::KeyPress(key) = event.event_type {
+                if let Some(code) = key_to_code(&key) {
+                    let _ = event_app.emit("global-keydown", code);
+                }
+            }
+        });
+
+        match result {
+            Ok(()) => eprintln!("global keyboard listener stopped unexpectedly"),
+            Err(error) => eprintln!("global keyboard listener error: {error:?}"),
+        }
+        let status = listener_state.listener_error();
+        let _ = app.emit("keyboard-listener-status", status);
+    });
+
+    KeyboardStatus::active()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::key_to_code;
+    use super::{key_to_code, KeyboardListenerState, KeyboardStatus};
     use rdev::Key;
+    use serde_json::json;
 
     #[test]
     fn maps_supported_keys_to_browser_codes() {
@@ -217,5 +305,39 @@ mod tests {
         }
 
         assert_eq!(key_to_code(&Key::Unknown(1)), None);
+    }
+
+    #[test]
+    fn listener_start_is_idempotent() {
+        let state = KeyboardListenerState::default();
+
+        assert!(state.claim_start());
+        assert!(!state.claim_start());
+        state.release();
+        assert!(state.claim_start());
+    }
+
+    #[test]
+    fn listener_error_releases_the_start_claim() {
+        let state = KeyboardListenerState::default();
+        assert!(state.claim_start());
+
+        assert_eq!(
+            state.listener_error(),
+            KeyboardStatus::fallback("listener-error")
+        );
+        assert!(state.claim_start());
+    }
+
+    #[test]
+    fn keyboard_status_uses_the_frontend_contract() {
+        assert_eq!(
+            serde_json::to_value(KeyboardStatus::active()).unwrap(),
+            json!({ "status": "active", "reason": null })
+        );
+        assert_eq!(
+            serde_json::to_value(KeyboardStatus::fallback("permission-required")).unwrap(),
+            json!({ "status": "fallback", "reason": "permission-required" })
+        );
     }
 }

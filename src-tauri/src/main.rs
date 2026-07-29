@@ -3,7 +3,7 @@
 pub mod keyboard;
 
 use tauri::{
-    Emitter, Manager,
+    Manager,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
 };
@@ -14,11 +14,6 @@ fn main() {
             // macOS: hide the Dock icon, pet lives in the menu bar only
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            // NOTE: rdev global keyboard listener is disabled because it
-            // crashes the process on macOS without accessibility permission.
-            // The frontend uses window keydown as a fallback instead.
-            let _ = app.emit("kb-listen-error", "rdev disabled");
 
             let show = MenuItemBuilder::with_id("show", "显示宠物").build(app)?;
             let hide = MenuItemBuilder::with_id("hide", "隐藏宠物").build(app)?;
@@ -65,6 +60,8 @@ fn main() {
                 window.app_handle().exit(0);
             }
         })
+        .manage(keyboard::KeyboardListenerState::default())
+        .invoke_handler(tauri::generate_handler![keyboard::start_keyboard_listener])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
