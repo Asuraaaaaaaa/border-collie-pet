@@ -43,6 +43,14 @@ const timerEl = document.getElementById("timer");
 const ctxMenu = document.getElementById("ctxMenu");
 const pomodoroItem = document.getElementById("pomodoroItem");
 const waterItem = document.getElementById("waterItem");
+const pomoPanel = document.getElementById("pomoPanel");
+const pomoWorkInput = document.getElementById("pomoWork");
+const pomoBreakInput = document.getElementById("pomoBreak");
+const pomoRoundsInput = document.getElementById("pomoRounds");
+const pomoPoseSelect = document.getElementById("pomoPose");
+const workVal = document.getElementById("workVal");
+const breakVal = document.getElementById("breakVal");
+const roundsVal = document.getElementById("roundsVal");
 
 let state = "idle";
 let frameIdx = 0;
@@ -147,6 +155,9 @@ function tick() {
 
   if (pomodoro.active) updatePomodoro();
 
+  // skip movement while the context menu is open (window is enlarged)
+  if (menuOpen) return;
+
   if (state === "walk" || state === "run") {
     pos.x += dir * SPEEDS[state];
     if (pos.x <= 0) { pos.x = 0; dir = 1; img.classList.remove("flip"); }
@@ -172,11 +183,19 @@ function tick() {
   }
 }
 
-// ---------- pomodoro timer ----------
+// ---------- pomodoro timer (customizable) ----------
+const pomoConfig = {
+  work:   parseInt(localStorage.getItem("pomoWork"))   || 25,
+  brk:    parseInt(localStorage.getItem("pomoBreak"))  || 5,
+  rounds: parseInt(localStorage.getItem("pomoRounds")) || 4,
+  pose:   localStorage.getItem("pomoPose")            || "lying",
+};
 const pomodoro = {
   active: false,
-  phase: "work",     // "work" | "break"
-  remaining: 0,      // seconds
+  phase: "work",      // "work" | "break"
+  remaining: 0,       // seconds
+  round: 0,           // current round (1-based)
+  lastTick: 0,
 };
 
 function fmtTime(sec) {
@@ -186,35 +205,68 @@ function fmtTime(sec) {
 }
 
 function startPomodoro() {
+  pomoConfig.work = parseInt(pomoWorkInput.value);
+  pomoConfig.brk = parseInt(pomoBreakInput.value);
+  pomoConfig.rounds = parseInt(pomoRoundsInput.value);
+  pomoConfig.pose = pomoPoseSelect.value;
+  localStorage.setItem("pomoWork", pomoConfig.work);
+  localStorage.setItem("pomoBreak", pomoConfig.brk);
+  localStorage.setItem("pomoRounds", pomoConfig.rounds);
+  localStorage.setItem("pomoPose", pomoConfig.pose);
   pomodoro.active = true;
   pomodoro.phase = "work";
-  pomodoro.remaining = 25 * 60;
+  pomodoro.remaining = pomoConfig.work * 60;
+  pomodoro.round = 1;
   pomodoro.lastTick = 0;
-  lockedState = "lying";
+  lockedState = pomoConfig.pose;
   pomodoroItem.classList.toggle("check", true);
   pomodoroItem.classList.toggle("uncheck", false);
-  enter("lying");
+  enter(pomoConfig.pose);
   timerEl.style.display = "block";
   timerEl.textContent = fmtTime(pomodoro.remaining);
-  showBubble("开始专注!25分钟", 3000);
+  if (typeof kbShow === "function") kbShow();
+  showBubble("开始专注! " + pomoConfig.work + "分钟 (第1/" + pomoConfig.rounds + "轮)", 3500);
+}
+
+function stopPomodoro() {
+  pomodoro.active = false;
+  lockedState = null;
+  timerEl.style.display = "none";
+  if (typeof kbHide === "function") kbHide();
+  pomodoroItem.classList.toggle("check", false);
+  pomodoroItem.classList.toggle("uncheck", true);
+  showBubble("番茄钟已停止", 2000);
+  enter("idle");
 }
 
 function endPomodoroPhase() {
   if (pomodoro.phase === "work") {
-    showBubble("休息一下吧!5分钟", 5000);
+    // work phase done -> break: show keyboard summary, hide panel
+    const total = kbTotal || 0;
+    const top = Object.entries(kbKeyMap).sort((a,b) => b[1]-a[1]).slice(0,3)
+      .map(([c]) => c.replace(/^Key|^Digit/, "")).join(" ");
+    showBubble("休息一下吧! " + pomoConfig.brk + "分钟\n本轮敲了 " + total + " 键" + (top ? " 热键:" + top : ""), 6000);
+    if (typeof kbHide === "function") kbHide();
     pomodoro.phase = "break";
-    pomodoro.remaining = 5 * 60;
+    pomodoro.remaining = pomoConfig.brk * 60;
     lockedState = null;
     enter("happy");
     setTimeout(() => { if (pomodoro.active) enter("walk"); }, 2000);
   } else {
-    pomodoro.active = false;
-    lockedState = null;
-    timerEl.style.display = "none";
-    pomodoroItem.classList.toggle("check", false);
-    pomodoroItem.classList.toggle("uncheck", true);
-    showBubble("番茄钟结束,继续加油!", 3000);
-    enter("idle");
+    // break done -> next round or finish
+    if (pomodoro.round >= pomoConfig.rounds) {
+      stopPomodoro();
+      showBubble("全部 " + pomoConfig.rounds + " 轮完成!辛苦啦!", 5000);
+      enter("happy");
+      return;
+    }
+    pomodoro.round++;
+    pomodoro.phase = "work";
+    pomodoro.remaining = pomoConfig.work * 60;
+    lockedState = pomoConfig.pose;
+    if (typeof kbShow === "function") kbShow();
+    showBubble("第 " + pomodoro.round + "/" + pomoConfig.rounds + " 轮,开始专注!", 3500);
+    enter(pomoConfig.pose);
   }
 }
 
@@ -228,7 +280,8 @@ function updatePomodoro() {
     if (pomodoro.remaining <= 0) {
       endPomodoroPhase();
     } else {
-      timerEl.textContent = fmtTime(pomodoro.remaining);
+      const label = pomodoro.phase === "work" ? "\u25CF" : "\u25CB";
+      timerEl.textContent = label + fmtTime(pomodoro.remaining) + " " + pomodoro.round + "/" + pomoConfig.rounds;
     }
   }
 }
@@ -283,6 +336,8 @@ let downScreen = { x: 0, y: 0 };
 
 img.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
+  // ensure the window has focus so keydown events are received
+  win.setFocus().catch(() => {});
   dragging = true;
   grab = { x: e.clientX, y: e.clientY };
   downScreen = { x: e.screenX, y: e.screenY };
@@ -312,41 +367,115 @@ window.addEventListener("mouseup", (e) => {
 });
 
 // ---------- context menu ----------
+const MENU_W = 220;
+const MENU_H = 520;
+let menuOpen = false;
+
+function openMenu(clientX, clientY) {
+  // Strategy: expand the window upward so the menu sits ABOVE the pet.
+  // The pet stays in the bottom part of the expanded window, fully visible.
+  // If there's no room above (pet near top of screen), expand downward instead.
+  const petSize = size;
+  const newW = Math.max(MENU_W, petSize);
+  const newH = MENU_H + petSize;
+
+  // try placing menu above the pet
+  let newY = pos.y - MENU_H;
+  let menuTop = 0;
+  let petTop = MENU_H;
+
+  if (newY < 0) {
+    // not enough room above -> place menu below the pet
+    newY = pos.y;
+    menuTop = petSize;
+    petTop = 0;
+  }
+
+  // horizontal: center the expanded window on the pet
+  let newX = Math.round(pos.x - (newW - petSize) / 2);
+  newX = Math.max(0, Math.min(newX, bounds.w - newW));
+
+  win.setSize(new T.window.LogicalSize(newW, newH));
+  win.setPosition(new LogicalPosition(newX, newY));
+
+  // reposition pet image within the expanded window
+  img.style.left = Math.round((newW - petSize) / 2) + "px";
+  img.style.top = petTop + "px";
+
+  // show the menu
+  ctxMenu.style.display = "block";
+  ctxMenu.style.maxHeight = MENU_H + "px";
+  ctxMenu.style.left = "4px";
+  ctxMenu.style.top = menuTop + "px";
+  ctxMenu.style.width = (MENU_W - 8) + "px";
+  menuOpen = true;
+}
+
+function closeMenu() {
+  if (!menuOpen) return;
+  ctxMenu.style.display = "none";
+  pomoPanel.style.display = "none";
+  document.getElementById("interactPanel").style.display = "none";
+  // restore pet image position
+  img.style.left = "0";
+  img.style.top = "0";
+  // shrink window back to pet size
+  applySize();
+  // restore position so the pet doesn't jump
+  win.setPosition(new LogicalPosition(Math.round(pos.x), Math.round(pos.y)));
+  menuOpen = false;
+}
+
 img.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  ctxMenu.style.display = "block";
-  // estimate menu height so we can flip it upward when near the bottom
-  const menuH = Math.min(ctxMenu.scrollHeight, 220);
-  const menuW = 150;
-  const mx = Math.max(0, Math.min(e.clientX, W() - menuW - 4));
-  let my = e.clientY;
-  if (my + menuH > W() - 4) my = Math.max(2, W() - menuH - 4);
-  ctxMenu.style.left = mx + "px";
-  ctxMenu.style.top = my + "px";
+  if (menuOpen) { closeMenu(); return; }
+  openMenu(e.clientX, e.clientY);
 });
 
-document.addEventListener("click", () => { ctxMenu.style.display = "none"; });
+document.addEventListener("click", (e) => {
+  // click outside the menu while it's open -> close it
+  if (menuOpen && !ctxMenu.contains(e.target)) closeMenu();
+});
 document.addEventListener("contextmenu", (e) => {
-  if (e.target !== img) { e.preventDefault(); ctxMenu.style.display = "none"; }
+  if (e.target !== img) {
+    e.preventDefault();
+    if (menuOpen) closeMenu();
+  }
 });
 
 ctxMenu.addEventListener("click", (e) => {
+  e.stopPropagation();
   const act = e.target.dataset.act;
   if (!act) return;
-  ctxMenu.style.display = "none";
+  // actions that should NOT close the menu (they open sub-panels)
+  const keepOpen = act === "pomodoro" || act === "interact";
+  if (!keepOpen) closeMenu();
   switch (act) {
     case "pomodoro":
       if (pomodoro.active) {
-        pomodoro.active = false;
-        lockedState = null;
-        timerEl.style.display = "none";
-        pomodoroItem.classList.toggle("check", false);
-        pomodoroItem.classList.toggle("uncheck", true);
-        showBubble("番茄钟已取消", 2000);
-        enter("idle");
+        stopPomodoro();
+        closeMenu();
       } else {
-        startPomodoro();
+        // toggle inline panel; keep menu open so user can interact with it
+        const isOpen = pomoPanel.style.display === "block";
+        pomoPanel.style.display = isOpen ? "none" : "block";
+        if (!isOpen) {
+          // sync controls with saved config
+          pomoWorkInput.value = pomoConfig.work;
+          pomoBreakInput.value = pomoConfig.brk;
+          pomoRoundsInput.value = pomoConfig.rounds;
+          pomoPoseSelect.value = pomoConfig.pose;
+          workVal.textContent = pomoConfig.work + " 分";
+          breakVal.textContent = pomoConfig.brk + " 分";
+          roundsVal.textContent = pomoConfig.rounds + " 轮";
+          updatePresetActive(pomoConfig.work);
+        }
       }
+      break;
+    case "interact":
+      // toggle the interaction sub-list
+      const panel = document.getElementById("interactPanel");
+      panel.style.display = panel.style.display === "none" ? "block" : "none";
       break;
     case "water":    toggleWater(); break;
     case "walk":     lockedState = null; enter("walk"); break;
@@ -374,11 +503,61 @@ ctxMenu.addEventListener("click", (e) => {
   }
 });
 
+// ---------- pomodoro panel interactions ----------
+function updatePresetActive(workMin) {
+  document.querySelectorAll(".preset-btn").forEach(btn => {
+    btn.classList.toggle("active", parseInt(btn.dataset.preset) === workMin);
+  });
+}
+
+// preset buttons: click to set work duration via slider
+document.querySelectorAll(".preset-btn").forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const v = parseInt(btn.dataset.preset);
+    pomoWorkInput.value = v;
+    workVal.textContent = v + " 分";
+    updatePresetActive(v);
+  });
+});
+
+// sliders: live-update labels and preset highlight
+pomoWorkInput.addEventListener("input", (e) => {
+  e.stopPropagation();
+  const v = parseInt(pomoWorkInput.value);
+  workVal.textContent = v + " 分";
+  updatePresetActive(v);
+});
+pomoBreakInput.addEventListener("input", (e) => {
+  e.stopPropagation();
+  breakVal.textContent = pomoBreakInput.value + " 分";
+});
+pomoRoundsInput.addEventListener("input", (e) => {
+  e.stopPropagation();
+  roundsVal.textContent = pomoRoundsInput.value + " 轮";
+});
+
+// panel buttons
+pomoPanel.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const act = e.target.dataset.act;
+  if (act === "pomoCancel") {
+    closeMenu();
+  } else if (act === "pomoStart") {
+    closeMenu();
+    startPomodoro();
+  }
+});
+
 // ---------- size control (mouse wheel) ----------
 function applySize() {
   img.style.width = size + "px";
   img.style.height = size + "px";
-  win.setSize(new T.window.LogicalSize(size, size)).catch(() => {});
+  window.__petSize = size;
+  // if keyboard is visible, keep window expanded; otherwise just pet size
+  const kbVisible = document.getElementById("kbPanel") && document.getElementById("kbPanel").style.display !== "none";
+  const w = kbVisible ? size + 340 : size;
+  win.setSize(new T.window.LogicalSize(w, size)).catch(() => {});
 }
 
 function setSize(newSize) {

@@ -71,8 +71,9 @@
       border-radius: 8px;
       padding: 4px 0;
       min-width: 150px;
-      max-height: 220px;
       overflow-y: auto;
+      overflow-x: hidden;
+      box-sizing: border-box;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
       z-index: 999;
       font: 13px -apple-system, "PingFang SC", sans-serif;
@@ -103,32 +104,192 @@
     #ctxMenu .uncheck::before {
       content: "\2003  ";
     }
+    #ctxMenu .has-sub::after {
+      content: " \25B6";
+      font-size: 9px;
+      color: #888;
+    }
+    .submenu {
+      position: fixed;
+      display: none;
+      background: rgba(245, 245, 245, 0.98);
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 8px;
+      padding: 4px 0;
+      min-width: 130px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      font: 13px -apple-system, "PingFang SC", sans-serif;
+      color: #1a1a1a;
+      z-index: 1000;
+    }
+    .submenu .item { padding: 6px 16px; cursor: pointer; white-space: nowrap; }
+    .submenu .item:hover { background: rgba(0, 122, 255, 0.1); }
+    .submenu .sep { height: 1px; margin: 4px 0; background: rgba(0,0,0,0.1); }
+    /* pomodoro inline config panel (shown inside the scrollable ctxMenu) */
+    .pomo-panel { padding: 6px 14px; }
+    .pomo-panel .preset-row { display: flex; gap: 4px; margin: 6px 0; }
+    .pomo-panel .preset-btn {
+      flex: 1; padding: 4px 0; border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 5px; background: #fff; font-size: 11px; cursor: pointer;
+    }
+    .pomo-panel .preset-btn.active { background: #007aff; color: #fff; border-color: #007aff; }
+    .pomo-panel .field { margin: 8px 0; }
+    .pomo-panel .field-label {
+      display: flex; justify-content: space-between;
+      font-size: 11px; margin-bottom: 3px; color: #555;
+    }
+    .pomo-panel .field-label .val { color: #007aff; font-weight: 500; }
+    .pomo-panel input[type=range] { width: 100%; margin: 0; }
+    .pomo-panel .select-row { margin: 8px 0; font-size: 11px; color: #555; }
+    .pomo-panel .select-row select {
+      width: 100%; padding: 3px 4px; margin-top: 3px;
+      border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 12px;
+    }
+    .pomo-panel .actions { display: flex; gap: 6px; margin-top: 10px; }
+    .pomo-panel .actions button {
+      flex: 1; padding: 5px 0; border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 5px; background: #fff; font-size: 12px; cursor: pointer;
+    }
+    .pomo-panel .actions button.primary {
+      background: #007aff; color: #fff; border-color: #007aff;
+    }
+    #kbPanel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 340px;
+      height: 100%;
+      background: rgba(30, 30, 35, 0.95);
+      border-radius: 10px 0 0 10px;
+      padding: 8px;
+      box-sizing: border-box;
+      font: 10px -apple-system, "PingFang SC", monospace;
+      color: #ddd;
+      overflow: hidden;
+      z-index: 50;
+    }
+    #kbStats {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 6px 6px;
+      font-size: 12px;
+      color: #4a9eff;
+      font-weight: 500;
+    }
+    #kbBoard { display: flex; flex-direction: column; gap: 2px; }
+    .kb-row { display: flex; gap: 2px; }
+    .kb-key {
+      flex: 1;
+      min-height: 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      color: #aaa;
+      transition: background 0.05s;
+    }
+    .kb-key.wide-2 { flex: 2; }
+    .kb-key.wide-3 { flex: 3; }
+    .kb-key.wide-6 { flex: 6; }
+    .kb-key.active {
+      background: #4a9eff;
+      color: #fff;
+      border-color: #4a9eff;
+      box-shadow: 0 0 8px rgba(74, 158, 255, 0.6);
+    }
+    #kbTop5 {
+      margin-top: 6px;
+      padding: 4px 6px;
+      font-size: 10px;
+      color: #888;
+    }
+    #kbTop5 .hot-key {
+      display: inline-block;
+      margin-right: 8px;
+      color: #ccc;
+    }
+    #kbTop5 .hot-key .bar {
+      display: inline-block;
+      height: 6px;
+      background: #4a9eff;
+      border-radius: 2px;
+      vertical-align: middle;
+      margin-left: 3px;
+    }
   </style>
 </head>
 <body>
   <img id="pet" draggable="false" src="assets/idle_0.png" alt="puppy" />
   <div id="bubble"></div>
   <div id="timer"></div>
+  <div id="kbPanel" style="display:none">
+    <div id="kbStats">
+      <span id="kbCount">0 键</span>
+      <span id="kbWpm">0 WPM</span>
+    </div>
+    <div id="kbBoard"></div>
+    <div id="kbTop5"></div>
+  </div>
   <div id="ctxMenu">
     <div class="item uncheck" data-act="pomodoro" id="pomodoroItem">番茄钟</div>
+    <div class="pomo-panel" id="pomoPanel" style="display:none">
+      <div class="preset-row">
+        <button class="preset-btn" data-preset="15">15</button>
+        <button class="preset-btn active" data-preset="25">25</button>
+        <button class="preset-btn" data-preset="30">30</button>
+        <button class="preset-btn" data-preset="45">45</button>
+        <button class="preset-btn" data-preset="60">60</button>
+      </div>
+      <div class="field">
+        <div class="field-label">工作时长 <span class="val" id="workVal">25 分</span></div>
+        <input type="range" id="pomoWork" min="5" max="90" step="5" value="25">
+      </div>
+      <div class="field">
+        <div class="field-label">休息时长 <span class="val" id="breakVal">5 分</span></div>
+        <input type="range" id="pomoBreak" min="1" max="30" step="1" value="5">
+      </div>
+      <div class="field">
+        <div class="field-label">循环次数 <span class="val" id="roundsVal">4 轮</span></div>
+        <input type="range" id="pomoRounds" min="1" max="10" step="1" value="4">
+      </div>
+      <div class="select-row">
+        专注时宠物姿势
+        <select id="pomoPose">
+          <option value="lying">趴下</option>
+          <option value="sit">坐着</option>
+          <option value="idle">站立</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button data-act="pomoCancel">取消</button>
+        <button data-act="pomoStart" class="primary">开始</button>
+      </div>
+    </div>
     <div class="item uncheck" data-act="water" id="waterItem">喝水提醒</div>
     <div class="sep"></div>
-    <div class="item" data-act="walk">去散步</div>
-    <div class="item" data-act="run">跑起来</div>
-    <div class="item" data-act="jump">蹦一下</div>
-    <div class="item" data-act="happy">摸摸头</div>
-    <div class="item" data-act="tilt">歪头杀</div>
-    <div class="item" data-act="wag">摇尾巴</div>
-    <div class="item" data-act="sniff">嗅一嗅</div>
-    <div class="item" data-act="scratch">挠痒痒</div>
-    <div class="item" data-act="sit">坐下</div>
-    <div class="item" data-act="sleep">去睡觉</div>
+    <div class="item" data-act="interact" id="interactItem">互动 ▶</div>
+    <div id="interactPanel" style="display:none">
+      <div class="item" data-act="walk">　去散步</div>
+      <div class="item" data-act="run">　跑起来</div>
+      <div class="item" data-act="jump">　蹦一下</div>
+      <div class="item" data-act="happy">　摸摸头</div>
+      <div class="item" data-act="tilt">　歪头杀</div>
+      <div class="item" data-act="wag">　摇尾巴</div>
+      <div class="item" data-act="sniff">　嗅一嗅</div>
+      <div class="item" data-act="scratch">　挠痒痒</div>
+      <div class="item" data-act="sit">　坐下</div>
+      <div class="item" data-act="sleep">　去睡觉</div>
+    </div>
     <div class="sep"></div>
     <div class="item" data-act="reset">回到原位</div>
     <div class="item" data-act="resetSize">重置大小</div>
     <div class="sep"></div>
     <div class="item" data-act="quit">退出</div>
   </div>
+  <script src="keyboard.js"></script>
   <script src="pet.js"></script>
 </body>
 </html>
