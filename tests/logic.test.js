@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -100,6 +101,88 @@ test("places the keyboard on the left near the right edge", () => {
     },
     petPosition,
   );
+});
+
+test("bottom-aligns a 100px pet beside the fixed 220px panel", () => {
+  const layout = calculateKeyboardLayout({
+    petPosition: { x: 80, y: 400 },
+    petSize: 100,
+    panelSize: { width: 340, height: 220 },
+    workArea: { x: 0, y: 0, width: 800, height: 600 },
+  });
+
+  assert.deepEqual(layout.windowSize, { width: 440, height: 220 });
+  assert.deepEqual(layout.petOffset, { x: 0, y: 120 });
+  assert.deepEqual(layout.panelOffset, { x: 100, y: 0 });
+  assert.equal(layout.overlay, false);
+});
+
+test("keeps a 320px pet and panel inside a supported work area", () => {
+  const workArea = { x: 0, y: 0, width: 800, height: 600 };
+  const layout = calculateKeyboardLayout({
+    petPosition: { x: 470, y: 250 },
+    petSize: 320,
+    panelSize: { width: 340, height: 220 },
+    workArea,
+  });
+
+  assert.deepEqual(layout.windowSize, { width: 660, height: 320 });
+  assert.equal(layout.panelOffset.y, 100);
+  assert.ok(layout.windowPosition.x >= workArea.x);
+  assert.ok(layout.windowPosition.x + layout.windowSize.width <= workArea.width);
+});
+
+test("uses overlay degradation below the supported work-area size", () => {
+  const workArea = { x: 0, y: 0, width: 640, height: 480 };
+  const layout = calculateKeyboardLayout({
+    petPosition: { x: 300, y: 150 },
+    petSize: 320,
+    panelSize: { width: 340, height: 220 },
+    workArea,
+  });
+
+  assert.equal(layout.overlay, true);
+  assert.equal(layout.windowSize.width, 640);
+  assert.ok(layout.panelOffset.x >= 0);
+  assert.ok(layout.panelOffset.x + 340 <= layout.windowSize.width);
+  assert.ok(layout.petOffset.x >= 0);
+  assert.ok(layout.petOffset.x + 320 <= layout.windowSize.width);
+});
+
+test("clamps an overlay layout against a negative monitor origin", () => {
+  const workArea = { x: -1440, y: 20, width: 800, height: 600 };
+  const layout = calculateKeyboardLayout({
+    petPosition: { x: -1220, y: 200 },
+    petSize: 320,
+    panelSize: { width: 340, height: 220 },
+    workArea,
+  });
+
+  assert.equal(layout.overlay, true);
+  assert.ok(layout.windowPosition.x >= workArea.x);
+  assert.ok(
+    layout.windowPosition.x + layout.windowSize.width
+      <= workArea.x + workArea.width,
+  );
+  assert.deepEqual(
+    {
+      x: layout.windowPosition.x + layout.petOffset.x,
+      y: layout.windowPosition.y + layout.petOffset.y,
+    },
+    { x: -1220, y: 200 },
+  );
+});
+
+test("refreshes monitor bounds before clamping a released drag", () => {
+  const source = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+  const releaseStart = source.indexOf('window.addEventListener("mouseup"');
+  const releaseEnd = source.indexOf("// ---------- context menu", releaseStart);
+  const releasePath = source.slice(releaseStart, releaseEnd);
+  const refreshIndex = releasePath.indexOf("await refreshMonitorBounds()");
+  const clampIndex = releasePath.indexOf("clampPetPosition(");
+
+  assert.ok(refreshIndex >= 0, "drag release must await monitor refresh");
+  assert.ok(clampIndex > refreshIndex, "drag release must clamp after monitor refresh");
 });
 
 test("returns the configured pomodoro pose unchanged", () => {

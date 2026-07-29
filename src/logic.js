@@ -78,18 +78,23 @@ export function calculateKeyboardLayout({
   panelSize,
   workArea,
 }) {
-  const windowSize = {
-    width: petSize + panelSize.width,
-    height: Math.max(petSize, panelSize.height),
-  };
+  const combinedWidth = petSize + panelSize.width;
   const rightEdge = workArea.x + workArea.width;
   const bottomEdge = workArea.y + workArea.height;
-  const fitsRight = petPosition.x + windowSize.width <= rightEdge;
+  const fitsRight = petPosition.x + combinedWidth <= rightEdge;
   const fitsLeft = petPosition.x - panelSize.width >= workArea.x;
-  const panelOnRight = fitsRight || !fitsLeft;
-  const desiredX = panelOnRight
-    ? petPosition.x
-    : petPosition.x - panelSize.width;
+  const supportedArea = workArea.width >= 800 && workArea.height >= 600;
+  const overlay = !supportedArea || (!fitsRight && !fitsLeft);
+  const panelOnRight = fitsRight || (!fitsLeft && !overlay);
+  const windowSize = {
+    width: overlay ? Math.min(combinedWidth, workArea.width) : combinedWidth,
+    height: Math.min(Math.max(petSize, panelSize.height), workArea.height),
+  };
+  const desiredX = overlay
+    ? petPosition.x - (windowSize.width - petSize) / 2
+    : panelOnRight
+      ? petPosition.x
+      : petPosition.x - panelSize.width;
   const desiredY = petPosition.y + petSize - windowSize.height;
   const windowPosition = {
     x: clamp(desiredX, workArea.x, rightEdge - windowSize.width),
@@ -100,8 +105,16 @@ export function calculateKeyboardLayout({
     y: petPosition.y - windowPosition.y,
   };
   const panelOffset = {
-    x: panelOnRight ? petOffset.x + petSize : 0,
-    y: windowSize.height - panelSize.height,
+    x: overlay
+      ? clamp(
+          petOffset.x + petSize,
+          0,
+          windowSize.width - panelSize.width,
+        )
+      : panelOnRight
+        ? petOffset.x + petSize
+        : 0,
+    y: Math.max(0, windowSize.height - panelSize.height),
   };
 
   return {
@@ -109,7 +122,7 @@ export function calculateKeyboardLayout({
     windowSize,
     petOffset,
     panelOffset,
-    overlay: false,
+    overlay,
   };
 }
 

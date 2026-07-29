@@ -4,9 +4,17 @@ import {
   configureKeyboardLayout,
   getKeyboardSummary,
   hideKeyboard,
+  resumeKeyboard,
   setKeyboardPanelRect,
   showKeyboard,
+  suspendKeyboard,
 } from "./keyboard.js";
+import {
+  calculateKeyboardLayout,
+  clampPetPosition,
+  defaultPetPosition,
+  monitorWorkAreaToLogical,
+} from "./logic.js";
 
 const T = window.__TAURI__;
 const win = T.window.getCurrentWindow();
@@ -68,7 +76,75 @@ let stateDuration = 120;
 let idleStreak = 0;
 let dir = 1;
 let pos = { x: 0, y: 0 };
-let bounds = { w: 1280, h: 800 };
+let bounds = { x: 0, y: 0, width: 1280, height: 800 };
+let menuOpen = false;
+const reportedWindowErrors = new Set();
+
+function reportWindowErrorOnce(operation, error) {
+  if (reportedWindowErrors.has(operation)) return;
+  reportedWindowErrors.add(operation);
+  console.error(`[window] ${operation} failed; keeping the last valid geometry:`, error);
+}
+
+async function refreshMonitorBounds(startup = false) {
+  try {
+    let monitor = await T.window.currentMonitor();
+    if (!monitor && startup) monitor = await T.window.primaryMonitor();
+    if (monitor) bounds = monitorWorkAreaToLogical(monitor);
+  } catch (error) {
+    reportWindowErrorOnce("monitor lookup", error);
+  }
+  return bounds;
+}
+
+async function setWindowSize(width, height) {
+  try {
+    await win.setSize(new T.window.LogicalSize(width, height));
+  } catch (error) {
+    reportWindowErrorOnce("window resize", error);
+  }
+}
+
+async function setWindowPosition(position) {
+  try {
+    await win.setPosition(new LogicalPosition(
+      Math.round(position.x),
+      Math.round(position.y),
+    ));
+  } catch (error) {
+    reportWindowErrorOnce("window move", error);
+  }
+}
+
+async function applyWindowLayout() {
+  if (menuOpen) return;
+  pos = clampPetPosition(pos, size, bounds);
+
+  if (!keyboardVisible) {
+    img.style.left = "0";
+    img.style.top = "0";
+    await setWindowSize(size, size);
+    await setWindowPosition(pos);
+    return;
+  }
+
+  const layout = calculateKeyboardLayout({
+    petPosition: pos,
+    petSize: size,
+    panelSize: { width: 340, height: 220 },
+    workArea: bounds,
+  });
+  img.style.left = `${layout.petOffset.x}px`;
+  img.style.top = `${layout.petOffset.y}px`;
+  setKeyboardPanelRect({
+    x: layout.panelOffset.x,
+    y: layout.panelOffset.y,
+    width: 340,
+    height: 220,
+  });
+  await setWindowSize(layout.windowSize.width, layout.windowSize.height);
+  await setWindowPosition(layout.windowPosition);
+}
 
 let bubbleTimer = null;
 function showBubble(text, ms = 4000) {
@@ -169,9 +245,10 @@ function tick() {
 
   if (state === "walk" || state === "run") {
     pos.x += dir * SPEEDS[state];
-    if (pos.x <= 0) { pos.x = 0; dir = 1; img.classList.remove("flip"); }
-    if (pos.x >= bounds.w - W()) { pos.x = bounds.w - W(); dir = -1; img.classList.add("flip"); }
-    win.setPosition(new LogicalPosition(Math.round(pos.x), Math.round(pos.y)));
+    if (pos.x <= bounds.x) { pos.x = bounds.x; dir = 1; img.classList.remove("flip"); }
+    const rightEdge = bounds.x + bounds.width - W();
+    if (pos.x >= rightEdge) { pos.x = rightEdge; dir = -1; img.classList.add("flip"); }
+    void setWindowPosition(pos);
     if (stateTimer > stateDuration) enter(pickNextFromPhase());
   } else if (state === "idle") {
     idleStreak++;
@@ -347,8 +424,9 @@ img.addEventListener("mousedown", (e) => {
   // ensure the window has focus so keydown events are received
   win.setFocus().catch(() => {});
   dragging = true;
-  grab = { x: e.clientX, y: e.clientY };
+  grab = { x: e.screenX - pos.x, y: e.screenY - pos.y };
   downScreen = { x: e.screenX, y: e.screenY };
+  suspendKeyboard();
   if (pomodoro.active && pomodoro.phase === "work") {
     lockedState = null;
   }
@@ -359,13 +437,17 @@ window.addEventListener("mousemove", (e) => {
   if (!dragging || !(e.buttons & 1)) return;
   pos.x = e.screenX - grab.x;
   pos.y = e.screenY - grab.y;
-  win.setPosition(new LogicalPosition(Math.round(pos.x), Math.round(pos.y)));
+  void setWindowPosition(pos);
 });
 
-window.addEventListener("mouseup", (e) => {
+window.addEventListener("mouseup", async (e) => {
   if (!dragging) return;
   dragging = false;
   const moved = Math.abs(e.screenX - downScreen.x) > 4 || Math.abs(e.screenY - downScreen.y) > 4;
+  await refreshMonitorBounds();
+  pos = clampPetPosition(pos, size, bounds);
+  resumeKeyboard();
+  await applyWindowLayout();
   if (pomodoro.active && pomodoro.phase === "work") {
     lockedState = "lying";
     enter("lying");
@@ -377,46 +459,41 @@ window.addEventListener("mouseup", (e) => {
 // ---------- context menu ----------
 const MENU_W = 220;
 const MENU_H = 520;
-let menuOpen = false;
 
-function openMenu(clientX, clientY) {
-  // Strategy: expand the window upward so the menu sits ABOVE the pet.
-  // The pet stays in the bottom part of the expanded window, fully visible.
-  // If there's no room above (pet near top of screen), expand downward instead.
+async function openMenu() {
+  suspendKeyboard();
+  await applyWindowLayout();
+  menuOpen = true;
+
   const petSize = size;
+  const topEdge = bounds.y;
+  const bottomEdge = bounds.y + bounds.height;
+  const spaceAbove = Math.max(0, pos.y - topEdge);
+  const spaceBelow = Math.max(0, bottomEdge - (pos.y + petSize));
+  const placeAbove = spaceAbove >= spaceBelow;
+  const menuHeight = Math.min(MENU_H, Math.max(spaceAbove, spaceBelow));
   const newW = Math.max(MENU_W, petSize);
-  const newH = MENU_H + petSize;
-
-  // try placing menu above the pet
-  let newY = pos.y - MENU_H;
-  let menuTop = 0;
-  let petTop = MENU_H;
-
-  if (newY < 0) {
-    // not enough room above -> place menu below the pet
-    newY = pos.y;
-    menuTop = petSize;
-    petTop = 0;
-  }
-
-  // horizontal: center the expanded window on the pet
+  const newH = menuHeight + petSize;
+  const newY = placeAbove ? pos.y - menuHeight : pos.y;
+  const menuTop = placeAbove ? 0 : petSize;
+  const petTop = placeAbove ? menuHeight : 0;
   let newX = Math.round(pos.x - (newW - petSize) / 2);
-  newX = Math.max(0, Math.min(newX, bounds.w - newW));
+  newX = Math.max(
+    bounds.x,
+    Math.min(newX, bounds.x + bounds.width - newW),
+  );
 
-  win.setSize(new T.window.LogicalSize(newW, newH));
-  win.setPosition(new LogicalPosition(newX, newY));
+  await setWindowSize(newW, newH);
+  await setWindowPosition({ x: newX, y: newY });
 
-  // reposition pet image within the expanded window
   img.style.left = Math.round((newW - petSize) / 2) + "px";
   img.style.top = petTop + "px";
 
-  // show the menu
   ctxMenu.style.display = "block";
-  ctxMenu.style.maxHeight = MENU_H + "px";
+  ctxMenu.style.maxHeight = menuHeight + "px";
   ctxMenu.style.left = "4px";
   ctxMenu.style.top = menuTop + "px";
   ctxMenu.style.width = (MENU_W - 8) + "px";
-  menuOpen = true;
 }
 
 function closeMenu() {
@@ -424,20 +501,15 @@ function closeMenu() {
   ctxMenu.style.display = "none";
   pomoPanel.style.display = "none";
   document.getElementById("interactPanel").style.display = "none";
-  // restore pet image position
-  img.style.left = "0";
-  img.style.top = "0";
-  // shrink window back to pet size
-  applySize();
-  // restore position so the pet doesn't jump
-  win.setPosition(new LogicalPosition(Math.round(pos.x), Math.round(pos.y)));
   menuOpen = false;
+  resumeKeyboard();
+  void applyWindowLayout();
 }
 
 img.addEventListener("contextmenu", (e) => {
   e.preventDefault();
   if (menuOpen) { closeMenu(); return; }
-  openMenu(e.clientX, e.clientY);
+  void openMenu();
 });
 
 document.addEventListener("click", (e) => {
@@ -498,9 +570,8 @@ ctxMenu.addEventListener("click", (e) => {
     case "sleep":    lockedState = null; enter("lying"); break;
     case "reset":
       lockedState = null;
-      pos.x = Math.round(bounds.w - W() - 120);
-      pos.y = Math.round(bounds.h - W() - 90);
-      win.setPosition(new LogicalPosition(pos.x, pos.y));
+      pos = defaultPetPosition(bounds, W());
+      void applyWindowLayout();
       enter("idle");
       break;
     case "resetSize":
@@ -558,30 +629,23 @@ pomoPanel.addEventListener("click", (e) => {
 });
 
 // ---------- size control (mouse wheel) ----------
-function applySize() {
+async function applySize() {
   img.style.width = size + "px";
   img.style.height = size + "px";
   window.__petSize = size;
-  const width = keyboardVisible ? size + 340 : size;
-  const height = keyboardVisible ? Math.max(size, 220) : size;
-  const petTop = keyboardVisible ? height - size : 0;
-  img.style.left = "0";
-  img.style.top = petTop + "px";
-  if (keyboardVisible) {
-    setKeyboardPanelRect({ x: size, y: height - 220, width: 340, height: 220 });
-  }
-  win.setSize(new T.window.LogicalSize(width, height)).catch(() => {});
+  pos = clampPetPosition(pos, size, bounds);
+  await applyWindowLayout();
 }
 
 configureKeyboardLayout((visible) => {
   keyboardVisible = visible;
-  applySize();
+  void applyWindowLayout();
 });
 
 function setSize(newSize) {
   size = Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(newSize)));
   localStorage.setItem("petSize", size);
-  applySize();
+  void applySize();
 }
 
 img.addEventListener("wheel", (e) => {
@@ -592,14 +656,9 @@ img.addEventListener("wheel", (e) => {
 
 // ---------- init ----------
 async function init() {
-  const monitor = await T.window.primaryMonitor();
-  const sf = monitor.scaleFactor;
-  bounds.w = monitor.size.width / sf;
-  bounds.h = monitor.size.height / sf;
-  applySize();
-  pos.x = Math.round(bounds.w - W() - 120);
-  pos.y = Math.round(bounds.h - W() - 90);
-  await win.setPosition(new LogicalPosition(pos.x, pos.y));
+  await refreshMonitorBounds(true);
+  pos = defaultPetPosition(bounds, W());
+  await applySize();
 
   const phase = getTimePhase();
   if (phase === "night") {
