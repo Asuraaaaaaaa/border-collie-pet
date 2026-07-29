@@ -2,6 +2,46 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(value, Math.max(min, max)));
 }
 
+export const KEYBOARD_LAYOUT = [
+  [
+    ["Esc", "Escape"], ["F1", "F1"], ["F2", "F2"], ["F3", "F3"],
+    ["F4", "F4"], ["F5", "F5"], ["F6", "F6"], ["F7", "F7"],
+    ["F8", "F8"], ["F9", "F9"], ["F10", "F10"], ["F11", "F11"],
+    ["F12", "F12"],
+  ],
+  [
+    ["`", "Backquote"], ["1", "Digit1"], ["2", "Digit2"],
+    ["3", "Digit3"], ["4", "Digit4"], ["5", "Digit5"],
+    ["6", "Digit6"], ["7", "Digit7"], ["8", "Digit8"],
+    ["9", "Digit9"], ["0", "Digit0"], ["-", "Minus"],
+    ["=", "Equal"], ["Bksp", "Backspace", "wide-2"],
+  ],
+  [
+    ["Tab", "Tab", "wide-2"], ["Q", "KeyQ"], ["W", "KeyW"],
+    ["E", "KeyE"], ["R", "KeyR"], ["T", "KeyT"], ["Y", "KeyY"],
+    ["U", "KeyU"], ["I", "KeyI"], ["O", "KeyO"], ["P", "KeyP"],
+    ["[", "BracketLeft"], ["]", "BracketRight"],
+    ["\\", "Backslash", "wide-2"],
+  ],
+  [
+    ["Caps", "CapsLock", "wide-2"], ["A", "KeyA"], ["S", "KeyS"],
+    ["D", "KeyD"], ["F", "KeyF"], ["G", "KeyG"], ["H", "KeyH"],
+    ["J", "KeyJ"], ["K", "KeyK"], ["L", "KeyL"],
+    [";", "Semicolon"], ["'", "Quote"], ["Enter", "Enter", "wide-3"],
+  ],
+  [
+    ["Shift", "ShiftLeft", "wide-3"], ["Z", "KeyZ"], ["X", "KeyX"],
+    ["C", "KeyC"], ["V", "KeyV"], ["B", "KeyB"], ["N", "KeyN"],
+    ["M", "KeyM"], [",", "Comma"], [".", "Period"], ["/", "Slash"],
+    ["Shift", "ShiftRight", "wide-3"],
+  ],
+  [
+    ["Ctrl", "ControlLeft"], ["Alt", "AltLeft"],
+    ["Space", "Space", "wide-6"], ["Alt", "AltRight"],
+    ["Ctrl", "ControlRight"],
+  ],
+];
+
 export function monitorWorkAreaToLogical(monitor) {
   const scaleFactor = monitor.scaleFactor || 1;
   return {

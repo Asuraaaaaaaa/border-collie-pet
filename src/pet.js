@@ -1,5 +1,13 @@
 // Border collie desktop pet — frame animation + behavior state machine
 // Features: pomodoro timer, water reminder, time awareness, battery guard
+import {
+  configureKeyboardLayout,
+  getKeyboardSummary,
+  hideKeyboard,
+  setKeyboardPanelRect,
+  showKeyboard,
+} from "./keyboard.js";
+
 const T = window.__TAURI__;
 const win = T.window.getCurrentWindow();
 const LogicalPosition = T.window.LogicalPosition;
@@ -8,6 +16,7 @@ const MIN_SIZE = 100;
 const MAX_SIZE = 320;
 const DEFAULT_SIZE = 160;
 let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
+let keyboardVisible = false;
 const W = () => size;
 const TICK_MS = 33;
 
@@ -224,7 +233,7 @@ function startPomodoro() {
   enter(pomoConfig.pose);
   timerEl.style.display = "block";
   timerEl.textContent = fmtTime(pomodoro.remaining);
-  if (typeof kbShow === "function") kbShow();
+  showKeyboard({ reset: true });
   showBubble("开始专注! " + pomoConfig.work + "分钟 (第1/" + pomoConfig.rounds + "轮)", 3500);
 }
 
@@ -232,7 +241,7 @@ function stopPomodoro() {
   pomodoro.active = false;
   lockedState = null;
   timerEl.style.display = "none";
-  if (typeof kbHide === "function") kbHide();
+  hideKeyboard();
   pomodoroItem.classList.toggle("check", false);
   pomodoroItem.classList.toggle("uncheck", true);
   showBubble("番茄钟已停止", 2000);
@@ -242,11 +251,10 @@ function stopPomodoro() {
 function endPomodoroPhase() {
   if (pomodoro.phase === "work") {
     // work phase done -> break: show keyboard summary, hide panel
-    const total = kbTotal || 0;
-    const top = Object.entries(kbKeyMap).sort((a,b) => b[1]-a[1]).slice(0,3)
-      .map(([c]) => c.replace(/^Key|^Digit/, "")).join(" ");
-    showBubble("休息一下吧! " + pomoConfig.brk + "分钟\n本轮敲了 " + total + " 键" + (top ? " 热键:" + top : ""), 6000);
-    if (typeof kbHide === "function") kbHide();
+    const { total, top } = getKeyboardSummary();
+    const topText = top.join(" ");
+    showBubble("休息一下吧! " + pomoConfig.brk + "分钟\n本轮敲了 " + total + " 键" + (topText ? " 热键:" + topText : ""), 6000);
+    hideKeyboard();
     pomodoro.phase = "break";
     pomodoro.remaining = pomoConfig.brk * 60;
     lockedState = null;
@@ -264,7 +272,7 @@ function endPomodoroPhase() {
     pomodoro.phase = "work";
     pomodoro.remaining = pomoConfig.work * 60;
     lockedState = pomoConfig.pose;
-    if (typeof kbShow === "function") kbShow();
+    showKeyboard({ reset: true });
     showBubble("第 " + pomodoro.round + "/" + pomoConfig.rounds + " 轮,开始专注!", 3500);
     enter(pomoConfig.pose);
   }
@@ -554,11 +562,21 @@ function applySize() {
   img.style.width = size + "px";
   img.style.height = size + "px";
   window.__petSize = size;
-  // if keyboard is visible, keep window expanded; otherwise just pet size
-  const kbVisible = document.getElementById("kbPanel") && document.getElementById("kbPanel").style.display !== "none";
-  const w = kbVisible ? size + 340 : size;
-  win.setSize(new T.window.LogicalSize(w, size)).catch(() => {});
+  const width = keyboardVisible ? size + 340 : size;
+  const height = keyboardVisible ? Math.max(size, 220) : size;
+  const petTop = keyboardVisible ? height - size : 0;
+  img.style.left = "0";
+  img.style.top = petTop + "px";
+  if (keyboardVisible) {
+    setKeyboardPanelRect({ x: size, y: height - 220, width: 340, height: 220 });
+  }
+  win.setSize(new T.window.LogicalSize(width, height)).catch(() => {});
 }
+
+configureKeyboardLayout((visible) => {
+  keyboardVisible = visible;
+  applySize();
+});
 
 function setSize(newSize) {
   size = Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(newSize)));

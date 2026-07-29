@@ -158,7 +158,7 @@
       top: 0;
       left: 0;
       width: 340px;
-      height: 100%;
+      height: 220px;
       background: rgba(30, 30, 35, 0.95);
       border-radius: 10px 0 0 10px;
       padding: 8px;
@@ -180,7 +180,8 @@
     .kb-row { display: flex; gap: 2px; }
     .kb-key {
       flex: 1;
-      min-height: 18px;
+      height: 18px;
+      min-width: 0;
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 3px;
@@ -190,6 +191,7 @@
       font-size: 9px;
       color: #aaa;
       transition: background 0.05s;
+      box-sizing: border-box;
     }
     .kb-key.wide-2 { flex: 2; }
     .kb-key.wide-3 { flex: 3; }
@@ -201,10 +203,13 @@
       box-shadow: 0 0 8px rgba(74, 158, 255, 0.6);
     }
     #kbTop5 {
-      margin-top: 6px;
-      padding: 4px 6px;
+      height: 20px;
+      padding: 4px 6px 2px;
+      box-sizing: border-box;
       font-size: 10px;
       color: #888;
+      white-space: nowrap;
+      overflow: hidden;
     }
     #kbTop5 .hot-key {
       display: inline-block;
@@ -219,6 +224,33 @@
       vertical-align: middle;
       margin-left: 3px;
     }
+    #kbStatusRow {
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 0 6px;
+      box-sizing: border-box;
+      color: #aaa;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    #kbStatus {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #kbRetry {
+      flex: none;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.08);
+      color: #ddd;
+      padding: 2px 7px;
+      font: inherit;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -232,6 +264,10 @@
     </div>
     <div id="kbBoard"></div>
     <div id="kbTop5"></div>
+    <div id="kbStatusRow">
+      <span id="kbStatus">窗口监听</span>
+      <button id="kbRetry" type="button" hidden>重试</button>
+    </div>
   </div>
   <div id="ctxMenu">
     <div class="item uncheck" data-act="pomodoro" id="pomodoroItem">番茄钟</div>
@@ -289,7 +325,6 @@
     <div class="sep"></div>
     <div class="item" data-act="quit">退出</div>
   </div>
-  <script src="keyboard.js"></script>
-  <script src="pet.js"></script>
+  <script type="module" src="pet.js"></script>
 </body>
 </html>

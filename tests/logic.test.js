@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  KEYBOARD_LAYOUT,
   applyKeyboardStatus,
   calculateKeyboardLayout,
   clampPetPosition,
@@ -13,6 +14,23 @@ import {
   resetKeyboardState,
   setKeyboardSuspended,
 } from "../src/logic.js";
+
+test("gives every displayed keyboard key a unique browser code", () => {
+  const keys = KEYBOARD_LAYOUT.flat();
+  assert.ok(keys.length > 0, "keyboard layout must not be empty");
+
+  const codes = keys.map(([, code]) => code);
+  for (const [label, code] of keys) {
+    assert.equal(typeof code, "string", `${label} must have a string code`);
+    assert.notEqual(code.trim(), "", `${label} must have a non-empty code`);
+  }
+  assert.equal(new Set(codes).size, codes.length, "keyboard codes must be unique");
+
+  for (let index = 1; index <= 12; index += 1) {
+    assert.ok(codes.includes(`F${index}`), `F${index} must have an explicit code`);
+  }
+  assert.ok(codes.includes("Backslash"));
+});
 
 test("converts a physical work area with a negative origin to logical coordinates", () => {
   assert.deepEqual(
