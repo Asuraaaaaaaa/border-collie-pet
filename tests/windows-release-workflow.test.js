@@ -25,7 +25,20 @@ function stepIndex(id) {
   return index;
 }
 
+function actionStep(action) {
+  const result = steps.find((candidate) => candidate.uses === action);
+  assert.ok(result, `workflow must include ${action}`);
+  return result;
+}
+
+function actionStepIndex(action) {
+  const index = steps.findIndex((candidate) => candidate.uses === action);
+  assert.notEqual(index, -1, `workflow must include ${action}`);
+  return index;
+}
+
 test("configures tag and manual Windows installer triggers", () => {
+  assert.equal(workflow.name, "Windows installer");
   assert.deepEqual(workflow.on.push.tags, ["v*"]);
   assert.deepEqual(workflow.on.workflow_dispatch, {});
   assert.equal(workflow.permissions.contents, "write");
@@ -33,9 +46,34 @@ test("configures tag and manual Windows installer triggers", () => {
 });
 
 test("installs dependencies and tests before either build path", () => {
+  const nodeSetup = actionStep("actions/setup-node@v4");
+  const rustCache = actionStep("Swatinem/rust-cache@v2");
+
+  assert.equal(nodeSetup.with["node-version"], 22);
+  assert.equal(nodeSetup.with.cache, "npm");
+  assert.equal(
+    actionStep("dtolnay/rust-toolchain@stable").uses,
+    "dtolnay/rust-toolchain@stable",
+  );
+  assert.equal(rustCache.with.workspaces, "src-tauri -> target");
   assert.equal(step("install").run, "npm ci");
   assert.equal(step("tests").run, "npm test");
 
+  assert.ok(
+    actionStepIndex("actions/checkout@v4") <
+      actionStepIndex("actions/setup-node@v4"),
+  );
+  assert.ok(
+    actionStepIndex("actions/setup-node@v4") <
+      actionStepIndex("dtolnay/rust-toolchain@stable"),
+  );
+  assert.ok(
+    actionStepIndex("dtolnay/rust-toolchain@stable") <
+      actionStepIndex("Swatinem/rust-cache@v2"),
+  );
+  assert.ok(
+    actionStepIndex("Swatinem/rust-cache@v2") < stepIndex("install"),
+  );
   assert.ok(stepIndex("install") < stepIndex("version_check"));
   assert.ok(stepIndex("version_check") < stepIndex("tests"));
   assert.ok(stepIndex("tests") < stepIndex("tag_release"));
@@ -63,6 +101,7 @@ test("publishes pushed tags as final GitHub releases", () => {
     "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')",
   );
   assert.equal(tagRelease.uses, "tauri-apps/tauri-action@v0");
+  assert.equal(tagRelease.env.GITHUB_TOKEN, "${{ secrets.GITHUB_TOKEN }}");
   assert.equal(tagRelease.with.args, "--bundles nsis");
   assert.equal(tagRelease.with.tagName, "${{ github.ref_name }}");
   assert.equal(tagRelease.with.releaseDraft, false);
