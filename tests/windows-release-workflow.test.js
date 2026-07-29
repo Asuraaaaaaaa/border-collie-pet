@@ -130,3 +130,13 @@ test("uploads manually built NSIS installers as an artifact", () => {
     "src-tauri/target/release/bundle/nsis/*.exe",
   );
 });
+
+test("documents automated Windows installer releases", () => {
+  const features = readFileSync(new URL("../FEATURES.md", import.meta.url), "utf8");
+
+  assert.match(features, /GitHub Actions/);
+  assert.match(features, /v0\.3\.0/);
+  assert.match(features, /NSIS.*\.exe/);
+  assert.match(features, /SmartScreen/);
+  assert.match(features, /workflow_dispatch/);
+});

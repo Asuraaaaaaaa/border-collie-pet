@@ -136,6 +136,14 @@ npm run build            # 打包 → src-tauri/target/release/bundle/
 - Windows 产物:`bundle/msi/*.msi` + `bundle/nsis/*.exe`
 - **跨端打包**:macOS 上不能交叉编译 Windows UI 应用,需在 Windows 机器上同样 `npm install && npm run build`
 
+### Windows 一键安装包
+
+- 推送与项目版本一致的标签（例如 `v0.3.0`）后，GitHub Actions 会在 Windows x64 环境运行测试并构建 NSIS `.exe` 安装程序。
+- 构建成功后，安装程序会自动附加到对应的 GitHub Release，用户从 Releases 页面下载并双击安装。
+- Actions 页面可通过 `workflow_dispatch` 手动构建测试安装包；手动运行只上传 Artifact，不创建 Release。
+- 当前安装包尚未进行代码签名，Windows SmartScreen 可能显示“未知发布者”提示。
+- 发布标签必须与 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本一致。
+
 ---
 
 ## 八、变更历史
