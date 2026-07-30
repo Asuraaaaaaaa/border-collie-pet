@@ -2,7 +2,7 @@
 
 > LinePuppy 是一款运行在 macOS 和 Windows 桌面上的边牧桌面宠物，集成序列帧动画、番茄钟、键盘统计、备忘录、喝水提醒和好友聊天等功能。
 
-- **当前版本**：`v0.3.5`
+- **当前版本**：`v0.3.6`
 - **最后更新**：2026-07-30
 - **桌面框架**：Tauri 2 + Rust
 - **前端**：HTML + CSS + JavaScript ES Modules + Vite 8
@@ -18,7 +18,7 @@ LinePuppy 以一个透明、无边框、默认始终置顶的小窗口运行。�
 ### 技术方案
 
 - Tauri 窗口配置使用 `transparent: true`、`decorations: false`、`alwaysOnTop: true`、`skipTaskbar: true`。
-- 窗口初始大小为 `160 x 160` 逻辑像素，宠物可调范围为 `100-320` 像素。
+- 窗口初始大小为 `164 x 164` 逻辑像素，内部保留透明安全边距；宠物默认显示为 `160 x 160`，可调范围为 `100-320` 像素。
 - 前端通过 Tauri Window API 设置窗口尺寸和屏幕位置。
 - 窗口几何更新使用“只执行最新任务”队列，合并快速连续发生的布局请求，减少 Windows 上的抖动和过期位置覆盖。
 
@@ -215,7 +215,7 @@ LinePuppy 以一个透明、无边框、默认始终置顶的小窗口运行。�
 - 首次登录需设置 `1-30` 个字符的昵称。
 - 会话在本地持久化，Supabase JS 客户端自动刷新 Token；支持主动退出登录。
 
-**技术方案**：使用 Supabase Auth `signInWithOtp` 和 `verifyOtp(type: "email")`，邮件由 Supabase 上配置的 SMTP 服务发送。客户端只包含可公开的 Supabase Publishable Key，不包含数据库密码、SMTP 授权码或 Service Role Key。
+**技术方案**：使用 Supabase Auth `signInWithOtp` 和 `verifyOtp(type: "email")`，邮件由 Supabase 上配置的 SMTP 服务发送。桌面端的 Auth 和 REST 请求通过 Tauri HTTP 插件交给 Rust 网络栈发送，避免 Windows WebView 请求失败；网络权限仅开放当前 Supabase 项目。客户端只包含可公开的 Supabase Publishable Key，不包含数据库密码、SMTP 授权码或 Service Role Key。
 
 ### 10.2 个人资料与好友码
 
@@ -408,7 +408,7 @@ npm test
 - 低电量功能取决于当前系统 WebView 是否开放 Battery Status API。
 - macOS 全局键盘监听需要“输入监控”权限；未授权或监听失败时只能统计宠物窗口获得的按键。
 - Windows 安装包当前未签名，首次下载/安装可能触发 SmartScreen。
-- 系统托盘“关于”弹窗中的版本文案目前仍为硬编码 `v0.3.0`，与实际版本 `v0.3.3` 不一致，不影响其他功能。
+- 系统托盘“关于”弹窗中的版本文案目前仍为硬编码 `v0.3.0`，与实际版本 `v0.3.6` 不一致，不影响其他功能。
 
 ---
 
@@ -442,6 +442,9 @@ npm test
 | `v0.3.1` | 2026-07-29 | 模拟键盘对话气泡与键/分统计等优化 |
 | `v0.3.2` | 2026-07-29 | Windows 布局适配和自动发版优化 |
 | `v0.3.3` | 2026-07-30 | 备忘录与到期提醒；邮箱 OTP 登录、好友申请、一对一实时聊天与未读通知 |
+| `v0.3.4` | 2026-07-30 | 修复 Windows 启动时键盘面板错误显示和宠物无法操作 |
+| `v0.3.5` | 2026-07-30 | 修复 Windows 右键菜单与备忘录面板裁切 |
+| `v0.3.6` | 2026-07-30 | 修复 Windows 宠物脚部裁切、备忘录新增入口和邮箱验证码网络请求 |
 
 ---
 

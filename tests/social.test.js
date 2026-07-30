@@ -26,6 +26,12 @@ test("provides an isolated Supabase social service", () => {
   assert.equal(existsSync(serviceUrl), true, "src/social-service.js must exist");
 });
 
+test("routes Supabase HTTP requests through the Tauri transport", () => {
+  const source = readFileSync(serviceUrl, "utf8");
+  assert.match(source, /@tauri-apps\/plugin-http/);
+  assert.match(source, /global:\s*\{\s*fetch:\s*tauriFetch\s*\}/);
+});
+
 function createSupabaseStub() {
   const calls = [];
   const result = (data) => Promise.resolve({ data, error: null });

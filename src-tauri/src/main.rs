@@ -10,6 +10,7 @@ use tauri::{
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_http::init())
         .setup(|app| {
             // macOS: hide the Dock icon, pet lives in the menu bar only
             #[cfg(target_os = "macos")]

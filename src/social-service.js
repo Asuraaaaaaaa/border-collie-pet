@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { SUPABASE_CONFIG } from "./config.js";
 import {
   normalizeEmail,
@@ -232,6 +233,7 @@ export function createSocialService(client) {
 
 export function createDefaultSocialService() {
   const client = createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key, {
+    global: { fetch: tauriFetch },
     auth: {
       persistSession: true,
       autoRefreshToken: true,

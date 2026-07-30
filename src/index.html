@@ -20,6 +20,8 @@
       top: 0;
       width: 160px;
       height: 160px;
+      max-width: calc(100vw - 4px);
+      max-height: calc(100vh - 4px);
       object-fit: contain;
       cursor: grab;
     }
@@ -223,7 +225,8 @@
     .memo-toolbar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
+      gap: 8px;
       width: 100%;
       max-width: 100%;
       min-width: 0;

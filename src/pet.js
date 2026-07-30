@@ -47,6 +47,7 @@ const LogicalPosition = T.window.LogicalPosition;
 const MIN_SIZE = 100;
 const MAX_SIZE = 320;
 const DEFAULT_SIZE = 160;
+const PET_WINDOW_MARGIN = 2;
 const FOCUS_POSE_VISUAL_INSETS = {
   lying: { top: 60, right: 8, bottom: 20, left: 8 },
   sit: { top: 22, right: 13, bottom: 9, left: 34 },
@@ -204,6 +205,35 @@ const scheduleWindowGeometry = createLatestTaskQueue(async (geometry) => {
   await setWindowPosition(geometry.position);
 });
 
+function addPetWindowMargin(layout) {
+  const offset = PET_WINDOW_MARGIN;
+  const shiftedLayout = {
+    ...layout,
+    windowPosition: {
+      x: layout.windowPosition.x - offset,
+      y: layout.windowPosition.y - offset,
+    },
+    windowSize: {
+      width: Math.ceil(layout.windowSize.width) + offset * 2,
+      height: Math.ceil(layout.windowSize.height) + offset * 2,
+    },
+    petOffset: {
+      x: (layout.petOffset?.x ?? 0) + offset,
+      y: (layout.petOffset?.y ?? 0) + offset,
+    },
+  };
+
+  for (const key of ["panelOffset", "menuOffset"]) {
+    if (!layout[key]) continue;
+    shiftedLayout[key] = {
+      x: layout[key].x + offset,
+      y: layout[key].y + offset,
+    };
+  }
+
+  return shiftedLayout;
+}
+
 function scaledPetInsets(pose) {
   const insetScale = size / DEFAULT_SIZE;
   const baseInsets = FOCUS_POSE_VISUAL_INSETS[pose]
@@ -256,13 +286,13 @@ async function applyWindowLayout() {
     memoAlert.style.display = "block";
     const panelSize = measureMemoAlert();
     const petInsets = scaledPetInsets("wag");
-    const layout = calculateKeyboardLayout({
+    const layout = addPetWindowMargin(calculateKeyboardLayout({
       petPosition: pos,
       petSize: size,
       petInsets,
       panelSize,
       workArea: bounds,
-    });
+    }));
     img.style.left = `${layout.petOffset.x}px`;
     img.style.top = `${layout.petOffset.y}px`;
     bubble.style.left = `${layout.petOffset.x + size / 2}px`;
@@ -287,17 +317,22 @@ async function applyWindowLayout() {
   }
 
   if (!socialVisible && !keyboardVisible) {
-    img.style.left = "0";
-    img.style.top = "0";
-    bubble.style.left = "50%";
-    bubble.style.top = "4px";
+    const layout = addPetWindowMargin({
+      windowPosition: pos,
+      windowSize: { width: size, height: size },
+      petOffset: { x: 0, y: 0 },
+    });
+    img.style.left = `${layout.petOffset.x}px`;
+    img.style.top = `${layout.petOffset.y}px`;
+    bubble.style.left = `${layout.petOffset.x + size / 2}px`;
+    bubble.style.top = `${layout.petOffset.y + 4}px`;
     timerEl.style.left = "auto";
-    timerEl.style.top = "4px";
-    timerEl.style.right = "4px";
+    timerEl.style.top = `${layout.petOffset.y + 4}px`;
+    timerEl.style.right = `${layout.petOffset.x + 4}px`;
     timerEl.style.transform = "none";
     await scheduleWindowGeometry({
-      size: { width: size, height: size },
-      position: pos,
+      size: layout.windowSize,
+      position: layout.windowPosition,
     });
     return;
   }
@@ -311,13 +346,13 @@ async function applyWindowLayout() {
         height: Math.min(socialPanelSize.height, bounds.height),
       }
     : keyboardPanelSize;
-  const layout = calculateKeyboardLayout({
+  const layout = addPetWindowMargin(calculateKeyboardLayout({
     petPosition: pos,
     petSize: size,
     petInsets,
     panelSize: activePanelSize,
     workArea: bounds,
-  });
+  }));
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
   bubble.style.left = `${layout.petOffset.x + size / 2}px`;
@@ -459,7 +494,10 @@ function tick() {
     if (pos.x <= bounds.x) { pos.x = bounds.x; dir = 1; img.classList.remove("flip"); }
     const rightEdge = bounds.x + bounds.width - W();
     if (pos.x >= rightEdge) { pos.x = rightEdge; dir = -1; img.classList.add("flip"); }
-    void setWindowPosition(pos);
+    void setWindowPosition(windowPositionForPet(pos, {
+      x: PET_WINDOW_MARGIN,
+      y: PET_WINDOW_MARGIN,
+    }));
     if (stateTimer > stateDuration) enter(pickNextFromPhase());
   } else if (state === "idle") {
     idleStreak++;
@@ -736,7 +774,6 @@ function openMemoForm(id = null) {
   memoError.textContent = "";
   memoForm.hidden = false;
   memoList.hidden = true;
-  memoAdd.hidden = true;
   const minimumDueAt = Math.ceil(Date.now() / 60_000) * 60_000;
   memoDueAt.min = toDatetimeLocalValue(minimumDueAt);
 
@@ -759,7 +796,6 @@ function closeMemoForm() {
   editingMemoId = null;
   memoForm.hidden = true;
   memoList.hidden = false;
-  memoAdd.hidden = false;
   memoError.textContent = "";
 }
 
@@ -966,13 +1002,13 @@ function measureContextMenu() {
 async function layoutContextMenu() {
   if (!menuOpen) return;
   const menuSize = measureContextMenu();
-  const layout = calculateMenuLayout({
+  const layout = addPetWindowMargin(calculateMenuLayout({
     petPosition: pos,
     petSize: size,
     petInsets: scaledPetInsets(state),
     menuSize,
     workArea: bounds,
-  });
+  }));
 
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
