@@ -556,6 +556,19 @@ test("allows Windows form controls and keyboard rows to shrink inside panels", (
   assert.match(html, /\.kb-key[\s\S]*?overflow:\s*hidden/);
 });
 
+test("keeps context-menu panels inside a stable Windows menu width", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+
+  assert.match(pet, /const MENU_WIDTH = 260/);
+  assert.match(pet, /width:\s*menuWidth,\s*height:\s*bounds\.height/);
+  assert.match(
+    html,
+    /\.pomo-panel,[\s\S]*?#interactPanel\s*\{[\s\S]*?display:\s*none;[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*100%/,
+  );
+  assert.doesNotMatch(html, /(?:pomoPanel|memoPanel|interactPanel)" style=/);
+});
+
 test("provides memo management and a persistent due reminder", () => {
   const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
   const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");

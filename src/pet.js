@@ -52,8 +52,7 @@ const FOCUS_POSE_VISUAL_INSETS = {
   sit: { top: 22, right: 13, bottom: 9, left: 34 },
   idle: { top: 28, right: 12, bottom: 10, left: 25 },
 };
-const MENU_MIN_SIZE = { width: 220, height: 0 };
-const MENU_MAX_WIDTH = 360;
+const MENU_WIDTH = 260;
 const MEMO_STORAGE_KEY = "linePuppyMemos";
 const MEMO_ALERT_MIN_SIZE = { width: 280, height: 144 };
 const MEMO_ALERT_MAX_SIZE = { width: 360, height: 280 };
@@ -947,13 +946,10 @@ window.addEventListener("mouseup", async (e) => {
 
 // ---------- context menu ----------
 function measureContextMenu() {
-  ctxMenu.style.width = `${MENU_MIN_SIZE.width}px`;
+  const menuWidth = Math.min(MENU_WIDTH, bounds.width);
+  ctxMenu.style.width = `${menuWidth}px`;
   ctxMenu.style.maxHeight = "none";
-  const maximum = {
-    width: Math.min(MENU_MAX_WIDTH, bounds.width),
-    height: bounds.height,
-  };
-  let measured = resolvePanelSize(
+  return resolvePanelSize(
     {
       clientWidth: ctxMenu.clientWidth,
       clientHeight: ctxMenu.clientHeight,
@@ -962,23 +958,9 @@ function measureContextMenu() {
       scrollWidth: ctxMenu.scrollWidth,
       scrollHeight: ctxMenu.scrollHeight,
     },
-    MENU_MIN_SIZE,
-    maximum,
+    { width: menuWidth, height: 0 },
+    { width: menuWidth, height: bounds.height },
   );
-  ctxMenu.style.width = `${measured.width}px`;
-  measured = resolvePanelSize(
-    {
-      clientWidth: ctxMenu.clientWidth,
-      clientHeight: ctxMenu.clientHeight,
-      offsetWidth: ctxMenu.offsetWidth,
-      offsetHeight: ctxMenu.offsetHeight,
-      scrollWidth: ctxMenu.scrollWidth,
-      scrollHeight: ctxMenu.scrollHeight,
-    },
-    { width: measured.width, height: 0 },
-    maximum,
-  );
-  return measured;
 }
 
 async function layoutContextMenu() {

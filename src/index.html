@@ -151,8 +151,18 @@
     .submenu .item { padding: 6px 16px; cursor: pointer; white-space: nowrap; }
     .submenu .item:hover { background: rgba(0, 122, 255, 0.1); }
     .submenu .sep { height: 1px; margin: 4px 0; background: rgba(0,0,0,0.1); }
-    /* pomodoro inline config panel (shown inside the scrollable ctxMenu) */
-    .pomo-panel { min-width: 0; padding: 6px 14px; box-sizing: border-box; }
+    /* inline panels shown inside the scrollable context menu */
+    .pomo-panel,
+    .memo-panel,
+    #interactPanel {
+      display: none;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      overflow-x: hidden;
+    }
+    .pomo-panel { padding: 6px 14px; }
     .pomo-panel .preset-row {
       display: flex;
       min-width: 0;
@@ -208,15 +218,16 @@
       text-align: center;
     }
     .memo-panel {
-      min-width: 0;
       padding: 6px 12px 10px;
-      box-sizing: border-box;
     }
     .memo-toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      width: 100%;
+      max-width: 100%;
       min-width: 0;
+      box-sizing: border-box;
       margin-bottom: 5px;
       color: #555;
       font-size: 11px;
@@ -1015,7 +1026,7 @@
   </div>
   <div id="ctxMenu">
     <div class="item uncheck" data-act="pomodoro" id="pomodoroItem">番茄钟</div>
-    <div class="pomo-panel" id="pomoPanel" style="display:none">
+    <div class="pomo-panel" id="pomoPanel">
       <div class="preset-row">
         <button class="preset-btn" data-preset="15">15</button>
         <button class="preset-btn active" data-preset="25">25</button>
@@ -1051,7 +1062,7 @@
     <div class="item uncheck" data-act="memo" id="memoItem">
       <span>备忘录</span><span id="memoCount" hidden>0</span>
     </div>
-    <div class="memo-panel" id="memoPanel" style="display:none">
+    <div class="memo-panel" id="memoPanel">
       <div class="memo-toolbar">
         <span>未完成</span>
         <button id="memoAdd" class="memo-icon-btn" type="button" title="新建备忘录" aria-label="新建备忘录">+</button>
@@ -1074,7 +1085,7 @@
     </div>
     <div class="sep"></div>
     <div class="item" data-act="interact" id="interactItem">互动 ▶</div>
-    <div id="interactPanel" style="display:none">
+    <div id="interactPanel">
       <div class="item" data-act="walk">　去散步</div>
       <div class="item" data-act="run">　跑起来</div>
       <div class="item" data-act="jump">　蹦一下</div>
