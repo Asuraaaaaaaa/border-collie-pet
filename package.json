@@ -6,12 +6,18 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
+    "frontend:dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
+    "frontend:build": "vite build",
     "tauri": "tauri",
     "test:js": "node --test tests/*.test.js",
     "test": "npm run test:js && cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "vite": "^8.1.5",
     "yaml": "^2.9.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.111.0"
   }
 }

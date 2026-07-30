@@ -582,6 +582,313 @@
       font: inherit;
       cursor: pointer;
     }
+    #socialPanel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      display: none;
+      width: 320px;
+      height: 420px;
+      border: 1px solid rgba(32, 38, 48, 0.14);
+      border-radius: 8px;
+      box-sizing: border-box;
+      background: rgba(252, 252, 252, 0.99);
+      color: #24272c;
+      font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      overflow: visible;
+      z-index: 1050;
+      box-shadow: 0 6px 22px rgba(24, 32, 44, 0.2);
+      --pointer-offset: 50%;
+    }
+    #socialPanel::after {
+      content: "";
+      position: absolute;
+      width: 11px;
+      height: 11px;
+      border: solid rgba(32, 38, 48, 0.14);
+      background: #fcfcfc;
+      transform: rotate(45deg);
+    }
+    #socialPanel[data-placement="above"]::after {
+      left: var(--pointer-offset); bottom: -7px; margin-left: -6px;
+      border-width: 0 1px 1px 0;
+    }
+    #socialPanel[data-placement="below"]::after {
+      left: var(--pointer-offset); top: -7px; margin-left: -6px;
+      border-width: 1px 0 0 1px;
+    }
+    #socialPanel[data-placement="right"]::after {
+      left: -7px; top: var(--pointer-offset); margin-top: -6px;
+      border-width: 0 0 1px 1px;
+    }
+    #socialPanel[data-placement="left"]::after {
+      right: -7px; top: var(--pointer-offset); margin-top: -6px;
+      border-width: 1px 1px 0 0;
+    }
+    .social-shell {
+      display: grid;
+      grid-template-rows: 42px minmax(0, 1fr);
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 7px;
+    }
+    .social-header {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) 34px;
+      align-items: center;
+      min-width: 0;
+      padding: 4px 7px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      box-sizing: border-box;
+      background: #f3f4f6;
+    }
+    .social-title {
+      min-width: 0;
+      overflow: hidden;
+      font-size: 13px;
+      font-weight: 650;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .social-icon-btn {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #4e545d;
+      font: 18px/28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+    }
+    .social-icon-btn:hover { background: rgba(0, 0, 0, 0.06); }
+    #socialBody {
+      display: block;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #socialMain {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) 44px;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+    }
+    #socialAuthView,
+    #socialProfileView {
+      height: 100%;
+    }
+    .social-view {
+      min-width: 0;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .social-view.chat-view { padding: 0; overflow: hidden; }
+    .social-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      min-width: 0;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      background: #f6f7f8;
+    }
+    .social-tab {
+      position: relative;
+      min-width: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #70757d;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .social-tab.active { color: #0878c9; font-weight: 650; }
+    .social-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 17px;
+      height: 17px;
+      margin-left: 5px;
+      padding: 0 4px;
+      border-radius: 9px;
+      box-sizing: border-box;
+      background: #e6342a;
+      color: #fff;
+      font-size: 10px;
+      line-height: 17px;
+    }
+    #socialItem {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    #socialUnread { margin-left: 12px; }
+    .social-form {
+      display: grid;
+      gap: 9px;
+      max-width: 280px;
+      margin: 28px auto 0;
+    }
+    .social-lead { margin: 0 0 5px; color: #5c626a; line-height: 1.55; }
+    .social-field-label { color: #5e646c; font-size: 11px; }
+    .social-input,
+    #socialComposer {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(0, 0, 0, 0.18);
+      border-radius: 5px;
+      padding: 8px 9px;
+      box-sizing: border-box;
+      background: #fff;
+      color: #24272c;
+      font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      user-select: text;
+      -webkit-user-select: text;
+      outline: none;
+    }
+    .social-input:focus,
+    #socialComposer:focus { border-color: #1686d9; box-shadow: 0 0 0 2px rgba(22, 134, 217, 0.1); }
+    .social-primary,
+    .social-secondary,
+    .social-danger {
+      min-height: 32px;
+      border: 1px solid rgba(0, 0, 0, 0.14);
+      border-radius: 5px;
+      padding: 6px 10px;
+      box-sizing: border-box;
+      background: #fff;
+      color: #30343a;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .social-primary { border-color: #0878c9; background: #0878c9; color: #fff; }
+    .social-danger { color: #c92a23; }
+    .social-primary:disabled,
+    .social-secondary:disabled,
+    .social-danger:disabled { opacity: 0.5; cursor: default; }
+    .social-actions { display: flex; gap: 7px; min-width: 0; }
+    .social-actions > * { flex: 1; min-width: 0; }
+    .social-error {
+      min-height: 17px;
+      color: #c92a23;
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .social-section-heading {
+      margin: 2px 0 8px;
+      color: #676d75;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .social-list { display: grid; min-width: 0; }
+    .social-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      min-height: 48px;
+      padding: 7px 2px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+      box-sizing: border-box;
+    }
+    .social-row-main { min-width: 0; cursor: pointer; }
+    .social-row-title {
+      min-width: 0;
+      overflow: hidden;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .social-row-meta {
+      min-width: 0;
+      margin-top: 3px;
+      overflow: hidden;
+      color: #777d85;
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .social-empty { padding: 48px 8px; color: #858b92; text-align: center; }
+    .social-code-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      margin-bottom: 12px;
+      padding: 8px 0 12px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    #socialFriendCode { font: 650 15px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .social-inline-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; margin-bottom: 13px; }
+    .social-request-actions { display: flex; gap: 5px; }
+    .social-request-actions button { min-height: 27px; padding: 4px 7px; }
+    .social-setting-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+    }
+    .social-setting-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: #0878c9; }
+    .social-settings-form { display: grid; gap: 8px; margin-bottom: 14px; }
+    #socialMessages {
+      height: calc(100% - 65px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 10px;
+      box-sizing: border-box;
+      background: #f4f5f6;
+    }
+    .social-message {
+      width: fit-content;
+      max-width: 78%;
+      margin: 5px 0;
+      padding: 7px 9px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 8px 8px 8px 2px;
+      box-sizing: border-box;
+      background: #fff;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .social-message.mine {
+      margin-left: auto;
+      border-color: rgba(8, 120, 201, 0.12);
+      border-radius: 8px 8px 2px 8px;
+      background: #dff1ff;
+    }
+    .social-message-time { margin-top: 3px; color: #82878e; font-size: 9px; text-align: right; }
+    .social-composer-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 52px;
+      gap: 7px;
+      height: 65px;
+      padding: 8px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      box-sizing: border-box;
+      background: #fff;
+    }
+    #socialComposer { height: 48px; resize: none; padding: 7px; line-height: 1.35; }
+    #socialSend { height: 48px; padding: 4px; }
+    .social-chat-menu { display: flex; gap: 6px; margin: 8px 10px 0; }
   </style>
 </head>
 <body>
@@ -598,6 +905,93 @@
     <div id="kbStatusRow">
       <span id="kbStatus">窗口监听</span>
       <button id="kbRetry" type="button" hidden>重试</button>
+    </div>
+  </div>
+  <div id="socialPanel" role="dialog" aria-modal="false" aria-label="好友与消息">
+    <div class="social-shell">
+      <header class="social-header">
+        <button id="socialBack" class="social-icon-btn" type="button" title="返回" aria-label="返回" hidden>‹</button>
+        <div id="socialTitle" class="social-title">好友与消息</div>
+        <button id="socialClose" class="social-icon-btn" type="button" title="关闭" aria-label="关闭">×</button>
+      </header>
+      <div id="socialBody">
+        <section id="socialAuthView" class="social-view">
+          <form id="socialEmailForm" class="social-form">
+            <p class="social-lead">使用邮箱验证码登录</p>
+            <label class="social-field-label" for="socialEmail">邮箱</label>
+            <input id="socialEmail" class="social-input" type="email" autocomplete="email" placeholder="name@example.com">
+            <button class="social-primary" type="submit">获取验证码</button>
+            <div id="socialAuthError" class="social-error" aria-live="polite"></div>
+          </form>
+          <form id="socialOtpForm" class="social-form" hidden>
+            <p id="socialOtpHint" class="social-lead"></p>
+            <label class="social-field-label" for="socialOtp">6 位验证码</label>
+            <input id="socialOtp" class="social-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+            <button class="social-primary" type="submit">登录</button>
+            <button id="socialChangeEmail" class="social-secondary" type="button">更换邮箱</button>
+            <div id="socialOtpError" class="social-error" aria-live="polite"></div>
+          </form>
+        </section>
+        <section id="socialProfileView" class="social-view" hidden>
+          <form id="socialProfileForm" class="social-form">
+            <p class="social-lead">设置一个好友能认出你的昵称</p>
+            <label class="social-field-label" for="socialNickname">昵称</label>
+            <input id="socialNickname" class="social-input" type="text" maxlength="30" autocomplete="nickname">
+            <button class="social-primary" type="submit">保存并开始使用</button>
+            <div id="socialProfileError" class="social-error" aria-live="polite"></div>
+          </form>
+        </section>
+        <main id="socialMain" hidden>
+          <section id="socialConversationsView" class="social-view">
+            <div id="socialConversations" class="social-list"></div>
+          </section>
+          <section id="socialFriendsView" class="social-view" hidden>
+            <div class="social-code-row">
+              <span>我的好友码</span>
+              <span id="socialFriendCode">--------</span>
+              <button id="socialCopyCode" class="social-icon-btn" type="button" title="复制好友码" aria-label="复制好友码">⧉</button>
+            </div>
+            <form id="socialFriendForm" class="social-inline-form">
+              <input id="socialFriendCodeInput" class="social-input" type="text" maxlength="8" placeholder="输入 8 位好友码">
+              <button class="social-primary" type="submit">添加</button>
+            </form>
+            <div id="socialFriendError" class="social-error" aria-live="polite"></div>
+            <div class="social-section-heading">好友</div>
+            <div id="socialFriends" class="social-list"></div>
+          </section>
+          <section id="socialRequestsView" class="social-view" hidden>
+            <div id="socialRequests" class="social-list"></div>
+          </section>
+          <section id="socialSettingsView" class="social-view" hidden>
+            <form id="socialSettingsForm" class="social-settings-form">
+              <label class="social-field-label" for="socialSettingsNickname">昵称</label>
+              <input id="socialSettingsNickname" class="social-input" type="text" maxlength="30">
+              <label class="social-setting-row" for="socialPreviewEnabled">
+                <span>桌面提醒显示消息正文</span>
+                <input id="socialPreviewEnabled" type="checkbox">
+              </label>
+              <button class="social-primary" type="submit">保存设置</button>
+              <div id="socialSettingsError" class="social-error" aria-live="polite"></div>
+            </form>
+            <div class="social-section-heading">已拉黑</div>
+            <div id="socialBlocked" class="social-list"></div>
+            <button id="socialSignOut" class="social-danger" type="button">退出登录</button>
+          </section>
+          <section id="socialChatView" class="social-view chat-view" hidden>
+            <div id="socialMessages"></div>
+            <form id="socialComposerForm" class="social-composer-row">
+              <textarea id="socialComposer" maxlength="500" placeholder="输入消息" aria-label="输入消息"></textarea>
+              <button id="socialSend" class="social-primary" type="submit">发送</button>
+            </form>
+          </section>
+          <nav id="socialTabs" class="social-tabs" aria-label="好友与消息导航">
+            <button class="social-tab active" type="button" data-social-view="conversations">消息</button>
+            <button class="social-tab" type="button" data-social-view="friends">好友</button>
+            <button class="social-tab" type="button" data-social-view="requests">申请<span id="socialRequestUnread" class="social-badge" hidden>0</span></button>
+            <button class="social-tab" type="button" data-social-view="settings">设置</button>
+          </nav>
+        </main>
+      </div>
     </div>
   </div>
   <div id="memoAlert" role="alertdialog" aria-live="assertive" aria-modal="false">
@@ -674,6 +1068,9 @@
       </form>
     </div>
     <div class="item uncheck" data-act="water" id="waterItem">喝水提醒</div>
+    <div class="item" data-act="social" id="socialItem">
+      <span>好友与消息</span><span id="socialUnread" class="social-badge" hidden>0</span>
+    </div>
     <div class="sep"></div>
     <div class="item" data-act="interact" id="interactItem">互动 ▶</div>
     <div id="interactPanel" style="display:none">

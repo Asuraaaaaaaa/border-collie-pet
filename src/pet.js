@@ -29,6 +29,16 @@ import {
   updateMemo,
   windowPositionForPet,
 } from "./logic.js";
+import {
+  SOCIAL_PANEL_SIZE,
+  configureSocialLayout,
+  configureSocialNotifications,
+  flushSocialNotifications,
+  hideSocial,
+  initializeSocial,
+  setSocialPanelRect,
+  showSocial,
+} from "./social-ui.js";
 
 const T = window.__TAURI__;
 const win = T.window.getCurrentWindow();
@@ -50,24 +60,50 @@ const MEMO_ALERT_MAX_SIZE = { width: 360, height: 280 };
 let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
 let keyboardVisible = false;
 let keyboardPanelSize = { ...KEYBOARD_PANEL_MIN_SIZE };
+let socialVisible = false;
+let socialPanelSize = { ...SOCIAL_PANEL_SIZE };
 let memoAlertSize = { ...MEMO_ALERT_MIN_SIZE };
 const W = () => size;
 const TICK_MS = 33;
 
+const PET_ASSETS = import.meta.glob([
+  "./assets/idle_*.png",
+  "./assets/walk_right_*.png",
+  "./assets/run_*.png",
+  "./assets/sit_*.png",
+  "./assets/lying_*.png",
+  "./assets/sleep_*.png",
+  "./assets/jump_*.png",
+  "./assets/wag_*.png",
+  "./assets/tilt_*.png",
+  "./assets/sniff_*.png",
+  "./assets/scratch_*.png",
+], {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+function petAsset(name) {
+  const url = PET_ASSETS[`./assets/${name}`];
+  if (!url) throw new Error(`Missing pet asset: ${name}`);
+  return url;
+}
+
 const ACTIONS = {
-  idle:   { frames: [0, 1, 2, 3].map(i => `assets/idle_${i}.png`), fps: 1.5 },
-  walk:   { frames: [0, 1, 2, 3].map(i => `assets/walk_right_${i}.png`), fps: 8 },
-  run:    { frames: [0, 1, 2, 3].map(i => `assets/run_${i}.png`), fps: 10 },
-  sit:    { frames: ["assets/sit_0.png", "assets/sit_1.png"], fps: 1.5 },
-  lying:  { frames: ["assets/lying_0.png"], fps: 1 },
-  sleep:  { frames: ["assets/sleep_0.png"], fps: 1 },
-  jump:   { frames: [0, 1, 2].map(i => `assets/jump_${i}.png`), fps: 6 },
-  wag:    { frames: [0, 1, 2, 3].map(i => `assets/wag_${i}.png`), fps: 4 },
-  tilt:   { frames: ["assets/tilt_0.png", "assets/tilt_1.png"], fps: 5 },
-  sniff:  { frames: ["assets/sniff_0.png", "assets/sniff_1.png"], fps: 2 },
-  scratch:{ frames: ["assets/scratch_0.png", "assets/scratch_1.png"], fps: 4 },
-  happy:  { frames: ["assets/tilt_0.png", "assets/tilt_1.png"], fps: 5 },
-  drag:   { frames: ["assets/tilt_0.png"], fps: 1 },
+  idle:   { frames: [0, 1, 2, 3].map(i => petAsset(`idle_${i}.png`)), fps: 1.5 },
+  walk:   { frames: [0, 1, 2, 3].map(i => petAsset(`walk_right_${i}.png`)), fps: 8 },
+  run:    { frames: [0, 1, 2, 3].map(i => petAsset(`run_${i}.png`)), fps: 10 },
+  sit:    { frames: [petAsset("sit_0.png"), petAsset("sit_1.png")], fps: 1.5 },
+  lying:  { frames: [petAsset("lying_0.png")], fps: 1 },
+  sleep:  { frames: [petAsset("sleep_0.png")], fps: 1 },
+  jump:   { frames: [0, 1, 2].map(i => petAsset(`jump_${i}.png`)), fps: 6 },
+  wag:    { frames: [0, 1, 2, 3].map(i => petAsset(`wag_${i}.png`)), fps: 4 },
+  tilt:   { frames: [petAsset("tilt_0.png"), petAsset("tilt_1.png")], fps: 5 },
+  sniff:  { frames: [petAsset("sniff_0.png"), petAsset("sniff_1.png")], fps: 2 },
+  scratch:{ frames: [petAsset("scratch_0.png"), petAsset("scratch_1.png")], fps: 4 },
+  happy:  { frames: [petAsset("tilt_0.png"), petAsset("tilt_1.png")], fps: 5 },
+  drag:   { frames: [petAsset("tilt_0.png")], fps: 1 },
 };
 
 // Actions that don't move the pet (play a one-shot animation in place)
@@ -251,7 +287,7 @@ async function applyWindowLayout() {
     return;
   }
 
-  if (!keyboardVisible) {
+  if (!socialVisible && !keyboardVisible) {
     img.style.left = "0";
     img.style.top = "0";
     bubble.style.left = "50%";
@@ -267,30 +303,40 @@ async function applyWindowLayout() {
     return;
   }
 
-  const petInsets = scaledPetInsets(pomoConfig.pose);
+  const petInsets = scaledPetInsets(
+    pomodoro.active && pomodoro.phase === "work" ? pomoConfig.pose : state,
+  );
+  const activePanelSize = socialVisible
+    ? {
+        width: Math.min(socialPanelSize.width, bounds.width),
+        height: Math.min(socialPanelSize.height, bounds.height),
+      }
+    : keyboardPanelSize;
   const layout = calculateKeyboardLayout({
     petPosition: pos,
     petSize: size,
     petInsets,
-    panelSize: keyboardPanelSize,
+    panelSize: activePanelSize,
     workArea: bounds,
   });
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
   bubble.style.left = `${layout.petOffset.x + size / 2}px`;
   bubble.style.top = `${layout.petOffset.y + petInsets.top - 4}px`;
-  timerEl.style.left = `${layout.panelOffset.x + keyboardPanelSize.width / 2}px`;
+  timerEl.style.left = `${layout.panelOffset.x + activePanelSize.width / 2}px`;
   timerEl.style.top = `${layout.panelOffset.y + 3}px`;
   timerEl.style.right = "auto";
   timerEl.style.transform = "translateX(-50%)";
-  setKeyboardPanelRect({
+  const panelRect = {
     x: layout.panelOffset.x,
     y: layout.panelOffset.y,
-    width: keyboardPanelSize.width,
-    height: keyboardPanelSize.height,
+    width: activePanelSize.width,
+    height: activePanelSize.height,
     placement: layout.placement,
     pointerOffset: layout.pointerOffset,
-  });
+  };
+  if (socialVisible) setSocialPanelRect(panelRect);
+  else setKeyboardPanelRect(panelRect);
   await scheduleWindowGeometry({
     size: layout.windowSize,
     position: layout.windowPosition,
@@ -406,8 +452,8 @@ function tick() {
 
   if (pomodoro.active) updatePomodoro();
 
-  // skip movement while the context menu is open (window is enlarged)
-  if (menuOpen) return;
+  // Keep the pet anchored while an expanded panel is attached to it.
+  if (menuOpen || socialVisible) return;
 
   if (state === "walk" || state === "run") {
     pos.x += dir * SPEEDS[state];
@@ -488,6 +534,7 @@ function stopPomodoro() {
   pomodoroItem.classList.toggle("check", false);
   pomodoroItem.classList.toggle("uncheck", true);
   showBubble("番茄钟已停止", 2000);
+  setTimeout(flushSocialNotifications, 2200);
   enter("idle");
 }
 
@@ -497,6 +544,7 @@ function endPomodoroPhase() {
     const { total, top } = getKeyboardSummary();
     const topText = top.join(" ");
     showBubble("休息一下吧! " + pomoConfig.brk + "分钟\n本轮敲了 " + total + " 键" + (topText ? " 热键:" + topText : ""), 6000);
+    setTimeout(flushSocialNotifications, 6200);
     hideKeyboard();
     pomodoro.phase = "break";
     pomodoro.remaining = pomoConfig.brk * 60;
@@ -758,6 +806,7 @@ function checkDueMemos() {
   bubble.style.display = "none";
   clearTimeout(bubbleTimer);
   img.classList.add("memo-due");
+  if (!previousMemo) hideSocial();
 
   if (menuOpen) {
     void closeMenu();
@@ -861,6 +910,7 @@ img.addEventListener("mousedown", (e) => {
   // ensure the window has focus so keydown events are received
   win.setFocus().catch(() => {});
   dragging = true;
+  hideSocial();
   grab = { x: e.screenX - pos.x, y: e.screenY - pos.y };
   downScreen = { x: e.screenX, y: e.screenY };
   suspendKeyboard();
@@ -956,6 +1006,7 @@ async function layoutContextMenu() {
 
 async function openMenu() {
   if (menuOpen) return;
+  hideSocial();
   menuOpen = true;
   suspendKeyboard();
   await refreshMonitorBounds();
@@ -1044,6 +1095,9 @@ ctxMenu.addEventListener("click", async (e) => {
       await layoutContextMenu();
       break;
     }
+    case "social":
+      showSocial();
+      break;
     case "interact":
       // toggle the interaction sub-list
       const panel = document.getElementById("interactPanel");
@@ -1139,6 +1193,28 @@ configureKeyboardLayout((visible, panelSize) => {
   void applyWindowLayout();
 });
 
+configureSocialLayout((visible, panelSize) => {
+  socialVisible = visible;
+  if (panelSize) socialPanelSize = panelSize;
+  if (visible) suspendKeyboard();
+  else if (!menuOpen && !activeMemo) resumeKeyboardIfAllowed();
+  void applyWindowLayout();
+});
+
+configureSocialNotifications({
+  onUnread(unread) {
+    const badge = document.getElementById("socialUnread");
+    badge.textContent = unread > 99 ? "99+" : String(unread);
+    badge.hidden = unread === 0;
+  },
+  onNotice(notice) {
+    showBubble(notice, 5000);
+  },
+  isFocusActive() {
+    return pomodoro.active && pomodoro.phase === "work";
+  },
+});
+
 function setSize(newSize) {
   size = Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.round(newSize)));
   localStorage.setItem("petSize", size);
@@ -1179,6 +1255,9 @@ async function init() {
   }
   setInterval(tick, TICK_MS);
   setInterval(checkDueMemos, 1000);
+  void initializeSocial().catch((error) => {
+    console.error("[social] initialization failed:", error);
+  });
 }
 
 document.addEventListener("visibilitychange", () => {

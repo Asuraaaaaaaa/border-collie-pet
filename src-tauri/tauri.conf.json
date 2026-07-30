@@ -4,7 +4,10 @@
   "version": "0.3.2",
   "identifier": "com.linepuppy.pet",
   "build": {
-    "frontendDist": "../src"
+    "beforeDevCommand": "npm run frontend:dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run frontend:build",
+    "frontendDist": "../src/dist"
   },
   "app": {
     "withGlobalTauri": true,
@@ -27,7 +30,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://xwdbslytwgzeicqiugdj.supabase.co wss://xwdbslytwgzeicqiugdj.supabase.co",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:1420 ws://127.0.0.1:1420 https://xwdbslytwgzeicqiugdj.supabase.co wss://xwdbslytwgzeicqiugdj.supabase.co"
     }
   },
   "bundle": {
