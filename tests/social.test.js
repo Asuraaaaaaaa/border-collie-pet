@@ -150,7 +150,13 @@ test("cleans up realtime subscriptions", async () => {
 test("provides the compact social panel and coordinator hooks", () => {
   assert.equal(existsSync(uiUrl), true, "src/social-ui.js must exist");
   const html = readFileSync(htmlUrl, "utf8");
+  const source = readFileSync(uiUrl, "utf8");
   const pet = readFileSync(petUrl, "utf8");
+  assert.match(source, /function leaveChat\(\)/);
+  assert.match(source, /backButton\.addEventListener\("click", leaveChat\)/);
+  assert.match(html, /#socialBack \{ grid-column: 1; \}/);
+  assert.match(html, /#socialTitle \{ grid-column: 2; \}/);
+  assert.match(html, /#socialClose \{ grid-column: 3; \}/);
   assert.match(html, /id="socialPanel"/);
   assert.match(html, /id="socialUnread"/);
   assert.match(html, /data-act="social"/);

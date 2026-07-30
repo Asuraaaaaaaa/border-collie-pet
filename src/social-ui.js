@@ -466,8 +466,14 @@ function createController(service) {
     if (state.session) void syncNow();
   }
 
+  function leaveChat() {
+    state.activeConversationId = null;
+    switchView("conversations");
+  }
+
   function close() {
     if (!state.visible) return;
+    leaveChat();
     state.visible = false;
     panel.style.display = "none";
     layoutHandler(false, SOCIAL_PANEL_SIZE);
@@ -526,7 +532,7 @@ function createController(service) {
   }
 
   closeButton.addEventListener("click", close);
-  backButton.addEventListener("click", () => switchView("conversations"));
+  backButton.addEventListener("click", leaveChat);
   tabs.addEventListener("click", (event) => {
     const tab = event.target.closest("[data-social-view]");
     if (tab) switchView(tab.dataset.socialView);
