@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import * as logic from "../src/logic.js";
 
 import {
   KEYBOARD_LAYOUT,
@@ -159,6 +160,75 @@ test("keeps the bubble and pet inside a work area with a negative origin", () =>
   );
 });
 
+test("expands fixed panels to fit Windows text and control metrics", () => {
+  assert.equal(typeof logic.resolvePanelSize, "function");
+  assert.deepEqual(
+    logic.resolvePanelSize(
+      {
+        clientWidth: 258,
+        clientHeight: 168,
+        offsetWidth: 260,
+        offsetHeight: 170,
+        scrollWidth: 310,
+        scrollHeight: 202,
+      },
+      { width: 260, height: 170 },
+      { width: 360, height: 240 },
+    ),
+    { width: 312, height: 204 },
+  );
+});
+
+test("keeps the pet stationary when an adaptive menu is clamped at an edge", () => {
+  assert.equal(typeof logic.calculateMenuLayout, "function");
+  const layout = logic.calculateMenuLayout({
+    petPosition: { x: 640, y: 400 },
+    petSize: 160,
+    petInsets: { top: 28, right: 12, bottom: 10, left: 25 },
+    menuSize: { width: 280, height: 300 },
+    workArea: { x: 0, y: 0, width: 800, height: 600 },
+  });
+
+  assert.equal(layout.placement, "above");
+  assert.deepEqual(layout.windowPosition, { x: 520, y: 120 });
+  assert.deepEqual(layout.windowSize, { width: 280, height: 440 });
+  assert.deepEqual(layout.petOffset, { x: 120, y: 280 });
+  assert.deepEqual(layout.menuOffset, { x: 0, y: 0 });
+  assert.deepEqual(
+    {
+      x: layout.windowPosition.x + layout.petOffset.x,
+      y: layout.windowPosition.y + layout.petOffset.y,
+    },
+    { x: 640, y: 400 },
+  );
+});
+
+test("coalesces pending window layouts so the latest state wins", async () => {
+  assert.equal(typeof logic.createLatestTaskQueue, "function");
+  const applied = [];
+  let releaseFirst;
+  const firstBlocked = new Promise((resolve) => { releaseFirst = resolve; });
+  const schedule = logic.createLatestTaskQueue(async (layout) => {
+    applied.push(`start:${layout}`);
+    if (layout === "pet") await firstBlocked;
+    applied.push(`end:${layout}`);
+  });
+
+  const first = schedule("pet");
+  await Promise.resolve();
+  schedule("menu");
+  const latest = schedule("keyboard");
+  releaseFirst();
+  await Promise.all([first, latest]);
+
+  assert.deepEqual(applied, [
+    "start:pet",
+    "end:pet",
+    "start:keyboard",
+    "end:keyboard",
+  ]);
+});
+
 test("refreshes monitor bounds before clamping a released drag", () => {
   const source = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
   const releaseStart = source.indexOf('window.addEventListener("mouseup"');
@@ -296,13 +366,26 @@ test("renders the simulated keyboard as a compact speech bubble", () => {
 
   assert.match(
     keyboard,
-    /KEYBOARD_PANEL_SIZE\s*=\s*\{\s*width:\s*260,\s*height:\s*170\s*\}/,
+    /KEYBOARD_PANEL_MIN_SIZE\s*=\s*\{\s*width:\s*260,\s*height:\s*170\s*\}/,
   );
+  assert.match(keyboard, /resolvePanelSize/);
+  assert.match(keyboard, /scrollWidth/);
   assert.match(keyboard, /panel\.dataset\.placement\s*=\s*rect\.placement/);
   assert.match(keyboard, /--pointer-offset/);
   assert.match(html, /#kbPanel::after/);
   assert.match(html, /#kbPanel\[data-placement="above"\]::after/);
   assert.match(timerStyles, /white-space:\s*nowrap/);
-  assert.match(pet, /timerEl\.style\.left\s*=.*layout\.petOffset\.x/);
-  assert.match(pet, /timerEl\.style\.top\s*=.*layout\.petOffset\.y/);
+  assert.match(pet, /timerEl\.style\.left\s*=.*layout\.panelOffset\.x/);
+  assert.match(pet, /timerEl\.style\.top\s*=.*layout\.panelOffset\.y/);
+});
+
+test("allows Windows form controls and keyboard rows to shrink inside panels", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+
+  assert.match(html, /"Segoe UI"/);
+  assert.match(html, /"Microsoft YaHei UI"/);
+  assert.match(html, /\.preset-btn[\s\S]*?min-width:\s*0/);
+  assert.match(html, /\.actions button[\s\S]*?min-width:\s*0/);
+  assert.match(html, /\.kb-row[\s\S]*?min-width:\s*0/);
+  assert.match(html, /\.kb-key[\s\S]*?overflow:\s*hidden/);
 });

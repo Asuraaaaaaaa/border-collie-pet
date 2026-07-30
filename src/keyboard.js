@@ -4,11 +4,13 @@ import {
   countRecentKeyPresses,
   createKeyboardState,
   recordKeyboardEvent,
+  resolvePanelSize,
   resetKeyboardState,
   setKeyboardSuspended,
 } from "./logic.js";
 
-export const KEYBOARD_PANEL_SIZE = { width: 260, height: 170 };
+export const KEYBOARD_PANEL_MIN_SIZE = { width: 260, height: 170 };
+const KEYBOARD_PANEL_MAX_SIZE = { width: 380, height: 240 };
 
 const panel = document.getElementById("kbPanel");
 const board = document.getElementById("kbBoard");
@@ -25,6 +27,7 @@ let layoutHandler = () => {};
 let listenersReadyPromise = null;
 let listenerStartPromise = null;
 let statisticsTimer = null;
+let panelSize = { ...KEYBOARD_PANEL_MIN_SIZE };
 
 function getTauri() {
   return window.__TAURI__;
@@ -168,6 +171,26 @@ export function configureKeyboardLayout(handler) {
   layoutHandler = handler;
 }
 
+function measureKeyboardPanel() {
+  panel.style.width = `${KEYBOARD_PANEL_MIN_SIZE.width}px`;
+  panel.style.height = `${KEYBOARD_PANEL_MIN_SIZE.height}px`;
+  panelSize = resolvePanelSize(
+    {
+      clientWidth: panel.clientWidth,
+      clientHeight: panel.clientHeight,
+      offsetWidth: panel.offsetWidth,
+      offsetHeight: panel.offsetHeight,
+      scrollWidth: panel.scrollWidth,
+      scrollHeight: panel.scrollHeight,
+    },
+    KEYBOARD_PANEL_MIN_SIZE,
+    KEYBOARD_PANEL_MAX_SIZE,
+  );
+  panel.style.width = `${panelSize.width}px`;
+  panel.style.height = `${panelSize.height}px`;
+  return panelSize;
+}
+
 export function setKeyboardPanelRect(rect) {
   panel.style.left = `${rect.x}px`;
   panel.style.top = `${rect.y}px`;
@@ -185,7 +208,7 @@ export function showKeyboard({ reset = true } = {}) {
   renderStatistics();
   startStatisticsRefresh();
   renderStatus();
-  layoutHandler(true, KEYBOARD_PANEL_SIZE);
+  layoutHandler(true, measureKeyboardPanel());
   void startKeyboardListener();
 }
 
@@ -193,7 +216,7 @@ export function hideKeyboard() {
   requestedVisible = false;
   stopStatisticsRefresh();
   panel.style.display = "none";
-  layoutHandler(false, KEYBOARD_PANEL_SIZE);
+  layoutHandler(false, panelSize);
 }
 
 export function suspendKeyboard() {
@@ -201,7 +224,7 @@ export function suspendKeyboard() {
   keyboardState = setKeyboardSuspended(keyboardState, true);
   stopStatisticsRefresh();
   panel.style.display = "none";
-  layoutHandler(false, KEYBOARD_PANEL_SIZE);
+  layoutHandler(false, panelSize);
 }
 
 export function resumeKeyboard() {
@@ -211,7 +234,7 @@ export function resumeKeyboard() {
   renderStatistics();
   startStatisticsRefresh();
   renderStatus();
-  layoutHandler(true, KEYBOARD_PANEL_SIZE);
+  layoutHandler(true, measureKeyboardPanel());
   void startKeyboardListener();
 }
 

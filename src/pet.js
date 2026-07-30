@@ -1,7 +1,7 @@
 // Border collie desktop pet — frame animation + behavior state machine
 // Features: pomodoro timer, water reminder, time awareness, battery guard
 import {
-  KEYBOARD_PANEL_SIZE,
+  KEYBOARD_PANEL_MIN_SIZE,
   configureKeyboardLayout,
   getKeyboardSummary,
   hideKeyboard,
@@ -11,11 +11,14 @@ import {
   suspendKeyboard,
 } from "./keyboard.js";
 import {
+  calculateMenuLayout,
   calculateKeyboardLayout,
   clampPetPosition,
+  createLatestTaskQueue,
   defaultPetPosition,
   monitorWorkAreaToLogical,
   pomodoroResumePose,
+  resolvePanelSize,
 } from "./logic.js";
 
 const T = window.__TAURI__;
@@ -30,8 +33,11 @@ const FOCUS_POSE_VISUAL_INSETS = {
   sit: { top: 22, right: 13, bottom: 9, left: 34 },
   idle: { top: 28, right: 12, bottom: 10, left: 25 },
 };
+const MENU_MIN_SIZE = { width: 220, height: 0 };
+const MENU_MAX_WIDTH = 360;
 let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
 let keyboardVisible = false;
+let keyboardPanelSize = { ...KEYBOARD_PANEL_MIN_SIZE };
 const W = () => size;
 const TICK_MS = 33;
 
@@ -85,7 +91,6 @@ let dir = 1;
 let pos = { x: 0, y: 0 };
 let bounds = { x: 0, y: 0, width: 1280, height: 800 };
 let menuOpen = false;
-let menuLayout = null;
 const reportedWindowErrors = new Set();
 
 function reportWindowErrorOnce(operation, error) {
@@ -124,6 +129,23 @@ async function setWindowPosition(position) {
   }
 }
 
+const scheduleWindowGeometry = createLatestTaskQueue(async (geometry) => {
+  await setWindowSize(geometry.size.width, geometry.size.height);
+  await setWindowPosition(geometry.position);
+});
+
+function scaledPetInsets(pose) {
+  const insetScale = size / DEFAULT_SIZE;
+  const baseInsets = FOCUS_POSE_VISUAL_INSETS[pose]
+    ?? FOCUS_POSE_VISUAL_INSETS.idle;
+  return Object.fromEntries(
+    Object.entries(baseInsets).map(([edge, value]) => [
+      edge,
+      Math.round(value * insetScale),
+    ]),
+  );
+}
+
 async function applyWindowLayout() {
   if (menuOpen) return;
   pos = clampPetPosition(pos, size, bounds);
@@ -137,45 +159,41 @@ async function applyWindowLayout() {
     timerEl.style.top = "4px";
     timerEl.style.right = "4px";
     timerEl.style.transform = "none";
-    await setWindowSize(size, size);
-    await setWindowPosition(pos);
+    await scheduleWindowGeometry({
+      size: { width: size, height: size },
+      position: pos,
+    });
     return;
   }
 
-  const insetScale = size / DEFAULT_SIZE;
-  const baseInsets = FOCUS_POSE_VISUAL_INSETS[pomoConfig.pose]
-    ?? FOCUS_POSE_VISUAL_INSETS.lying;
-  const petInsets = Object.fromEntries(
-    Object.entries(baseInsets).map(([edge, value]) => [
-      edge,
-      Math.round(value * insetScale),
-    ]),
-  );
+  const petInsets = scaledPetInsets(pomoConfig.pose);
   const layout = calculateKeyboardLayout({
     petPosition: pos,
     petSize: size,
     petInsets,
-    panelSize: KEYBOARD_PANEL_SIZE,
+    panelSize: keyboardPanelSize,
     workArea: bounds,
   });
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
   bubble.style.left = `${layout.petOffset.x + size / 2}px`;
   bubble.style.top = `${layout.petOffset.y + petInsets.top - 4}px`;
-  timerEl.style.left = `${layout.petOffset.x + size - 4}px`;
-  timerEl.style.top = `${layout.petOffset.y + petInsets.top}px`;
+  timerEl.style.left = `${layout.panelOffset.x + keyboardPanelSize.width / 2}px`;
+  timerEl.style.top = `${layout.panelOffset.y + 3}px`;
   timerEl.style.right = "auto";
-  timerEl.style.transform = "translateX(-100%)";
+  timerEl.style.transform = "translateX(-50%)";
   setKeyboardPanelRect({
     x: layout.panelOffset.x,
     y: layout.panelOffset.y,
-    width: KEYBOARD_PANEL_SIZE.width,
-    height: KEYBOARD_PANEL_SIZE.height,
+    width: keyboardPanelSize.width,
+    height: keyboardPanelSize.height,
     placement: layout.placement,
     pointerOffset: layout.pointerOffset,
   });
-  await setWindowSize(layout.windowSize.width, layout.windowSize.height);
-  await setWindowPosition(layout.windowPosition);
+  await scheduleWindowGeometry({
+    size: layout.windowSize,
+    position: layout.windowPosition,
+  });
 }
 
 let bubbleTimer = null;
@@ -490,94 +508,114 @@ window.addEventListener("mouseup", async (e) => {
 });
 
 // ---------- context menu ----------
-const MENU_W = 220;
-const MENU_H = 520;
+function measureContextMenu() {
+  ctxMenu.style.width = `${MENU_MIN_SIZE.width}px`;
+  ctxMenu.style.maxHeight = "none";
+  const maximum = {
+    width: Math.min(MENU_MAX_WIDTH, bounds.width),
+    height: bounds.height,
+  };
+  let measured = resolvePanelSize(
+    {
+      clientWidth: ctxMenu.clientWidth,
+      clientHeight: ctxMenu.clientHeight,
+      offsetWidth: ctxMenu.offsetWidth,
+      offsetHeight: ctxMenu.offsetHeight,
+      scrollWidth: ctxMenu.scrollWidth,
+      scrollHeight: ctxMenu.scrollHeight,
+    },
+    MENU_MIN_SIZE,
+    maximum,
+  );
+  ctxMenu.style.width = `${measured.width}px`;
+  measured = resolvePanelSize(
+    {
+      clientWidth: ctxMenu.clientWidth,
+      clientHeight: ctxMenu.clientHeight,
+      offsetWidth: ctxMenu.offsetWidth,
+      offsetHeight: ctxMenu.offsetHeight,
+      scrollWidth: ctxMenu.scrollWidth,
+      scrollHeight: ctxMenu.scrollHeight,
+    },
+    { width: measured.width, height: 0 },
+    maximum,
+  );
+  return measured;
+}
 
-function positionContextMenu() {
-  if (!menuLayout) return;
-  const top = menuLayout.placeAbove
-    ? menuLayout.availableHeight - ctxMenu.offsetHeight
-    : menuLayout.petSize;
-  ctxMenu.style.top = `${Math.max(0, top)}px`;
+async function layoutContextMenu() {
+  if (!menuOpen) return;
+  const menuSize = measureContextMenu();
+  const layout = calculateMenuLayout({
+    petPosition: pos,
+    petSize: size,
+    petInsets: scaledPetInsets(state),
+    menuSize,
+    workArea: bounds,
+  });
+
+  img.style.left = `${layout.petOffset.x}px`;
+  img.style.top = `${layout.petOffset.y}px`;
+  ctxMenu.style.left = `${layout.menuOffset.x}px`;
+  ctxMenu.style.top = `${layout.menuOffset.y}px`;
+  ctxMenu.style.width = `${layout.menuSize.width}px`;
+  ctxMenu.style.maxHeight = `${layout.menuSize.height}px`;
+  await scheduleWindowGeometry({
+    size: layout.windowSize,
+    position: layout.windowPosition,
+  });
 }
 
 async function openMenu() {
-  suspendKeyboard();
-  await applyWindowLayout();
+  if (menuOpen) return;
   menuOpen = true;
-
-  const petSize = size;
-  const topEdge = bounds.y;
-  const bottomEdge = bounds.y + bounds.height;
-  const spaceAbove = Math.max(0, pos.y - topEdge);
-  const spaceBelow = Math.max(0, bottomEdge - (pos.y + petSize));
-  const placeAbove = spaceAbove >= spaceBelow;
-  const menuHeight = Math.min(MENU_H, Math.max(spaceAbove, spaceBelow));
-  const newW = Math.max(MENU_W, petSize);
-  const newH = menuHeight + petSize;
-  const newY = placeAbove ? pos.y - menuHeight : pos.y;
-  const petTop = placeAbove ? menuHeight : 0;
-  let newX = Math.round(pos.x - (newW - petSize) / 2);
-  newX = Math.max(
-    bounds.x,
-    Math.min(newX, bounds.x + bounds.width - newW),
-  );
-
-  await setWindowSize(newW, newH);
-  await setWindowPosition({ x: newX, y: newY });
-
-  img.style.left = Math.round((newW - petSize) / 2) + "px";
-  img.style.top = petTop + "px";
-
+  suspendKeyboard();
+  await refreshMonitorBounds();
+  pos = clampPetPosition(pos, size, bounds);
   ctxMenu.style.display = "block";
-  ctxMenu.style.maxHeight = menuHeight + "px";
-  ctxMenu.style.left = "4px";
   ctxMenu.style.bottom = "auto";
-  ctxMenu.style.width = (MENU_W - 8) + "px";
-  menuLayout = { placeAbove, availableHeight: menuHeight, petSize };
-  positionContextMenu();
+  await layoutContextMenu();
 }
 
-function closeMenu() {
+async function closeMenu() {
   if (!menuOpen) return;
   ctxMenu.style.display = "none";
   pomoPanel.style.display = "none";
   document.getElementById("interactPanel").style.display = "none";
   menuOpen = false;
-  menuLayout = null;
   resumeKeyboard();
-  void applyWindowLayout();
+  await applyWindowLayout();
 }
 
 img.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  if (menuOpen) { closeMenu(); return; }
+  if (menuOpen) { void closeMenu(); return; }
   void openMenu();
 });
 
 document.addEventListener("click", (e) => {
   // click outside the menu while it's open -> close it
-  if (menuOpen && !ctxMenu.contains(e.target)) closeMenu();
+  if (menuOpen && !ctxMenu.contains(e.target)) void closeMenu();
 });
 document.addEventListener("contextmenu", (e) => {
   if (e.target !== img) {
     e.preventDefault();
-    if (menuOpen) closeMenu();
+    if (menuOpen) void closeMenu();
   }
 });
 
-ctxMenu.addEventListener("click", (e) => {
+ctxMenu.addEventListener("click", async (e) => {
   e.stopPropagation();
   const act = e.target.dataset.act;
   if (!act) return;
   // actions that should NOT close the menu (they open sub-panels)
   const keepOpen = act === "pomodoro" || act === "interact";
-  if (!keepOpen) closeMenu();
+  if (!keepOpen) await closeMenu();
   switch (act) {
     case "pomodoro":
       if (pomodoro.active) {
         stopPomodoro();
-        closeMenu();
+        await closeMenu();
       } else {
         // toggle inline panel; keep menu open so user can interact with it
         const isOpen = pomoPanel.style.display === "block";
@@ -593,14 +631,14 @@ ctxMenu.addEventListener("click", (e) => {
           roundsVal.textContent = pomoConfig.rounds + " 轮";
           updatePresetActive(pomoConfig.work);
         }
-        positionContextMenu();
+        await layoutContextMenu();
       }
       break;
     case "interact":
       // toggle the interaction sub-list
       const panel = document.getElementById("interactPanel");
       panel.style.display = panel.style.display === "none" ? "block" : "none";
-      positionContextMenu();
+      await layoutContextMenu();
       break;
     case "water":    toggleWater(); break;
     case "walk":     lockedState = null; enter("walk"); break;
@@ -662,13 +700,13 @@ pomoRoundsInput.addEventListener("input", (e) => {
 });
 
 // panel buttons
-pomoPanel.addEventListener("click", (e) => {
+pomoPanel.addEventListener("click", async (e) => {
   e.stopPropagation();
   const act = e.target.dataset.act;
   if (act === "pomoCancel") {
-    closeMenu();
+    await closeMenu();
   } else if (act === "pomoStart") {
-    closeMenu();
+    await closeMenu();
     startPomodoro();
   }
 });
@@ -682,8 +720,9 @@ async function applySize() {
   await applyWindowLayout();
 }
 
-configureKeyboardLayout((visible) => {
+configureKeyboardLayout((visible, panelSize) => {
   keyboardVisible = visible;
+  if (panelSize) keyboardPanelSize = panelSize;
   void applyWindowLayout();
 });
 
@@ -701,6 +740,13 @@ img.addEventListener("wheel", (e) => {
 
 // ---------- init ----------
 async function init() {
+  if (typeof win.onScaleChanged === "function") {
+    await win.onScaleChanged(async () => {
+      await refreshMonitorBounds();
+      if (menuOpen) await layoutContextMenu();
+      else await applyWindowLayout();
+    });
+  }
   await refreshMonitorBounds(true);
   pos = defaultPetPosition(bounds, W());
   await applySize();

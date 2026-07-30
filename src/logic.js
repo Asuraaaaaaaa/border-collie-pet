@@ -2,6 +2,63 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(value, Math.max(min, max)));
 }
 
+export function resolvePanelSize(measurements, minimum, maximum) {
+  const borderWidth = Math.max(
+    0,
+    (measurements.offsetWidth ?? measurements.clientWidth)
+      - measurements.clientWidth,
+  );
+  const borderHeight = Math.max(
+    0,
+    (measurements.offsetHeight ?? measurements.clientHeight)
+      - measurements.clientHeight,
+  );
+  return {
+    width: clamp(
+      Math.ceil(Math.max(
+        minimum.width,
+        measurements.scrollWidth + borderWidth,
+      )),
+      minimum.width,
+      maximum.width,
+    ),
+    height: clamp(
+      Math.ceil(Math.max(
+        minimum.height,
+        measurements.scrollHeight + borderHeight,
+      )),
+      minimum.height,
+      maximum.height,
+    ),
+  };
+}
+
+export function createLatestTaskQueue(runTask) {
+  let pendingTask;
+  let hasPendingTask = false;
+  let drainPromise = null;
+
+  async function drain() {
+    while (hasPendingTask) {
+      const task = pendingTask;
+      pendingTask = undefined;
+      hasPendingTask = false;
+      await runTask(task);
+    }
+  }
+
+  return function schedule(task) {
+    pendingTask = task;
+    hasPendingTask = true;
+    if (!drainPromise) {
+      drainPromise = drain().finally(() => {
+        drainPromise = null;
+      });
+    }
+    return drainPromise;
+  };
+}
+
 export const KEYBOARD_LAYOUT = [
   [
     ["Esc", "Escape"], ["F1", "F1"], ["F2", "F2"], ["F3", "F3"],
@@ -184,6 +241,79 @@ export function calculateKeyboardLayout({
     placement,
     pointerOffset,
     overlay: spaces[placement] < requiredSpace[placement],
+  };
+}
+
+export function calculateMenuLayout({
+  petPosition,
+  petSize,
+  petInsets = {},
+  menuSize,
+  workArea,
+  gap = 8,
+}) {
+  const leftEdge = workArea.x;
+  const rightEdge = workArea.x + workArea.width;
+  const topEdge = workArea.y;
+  const bottomEdge = workArea.y + workArea.height;
+  const visiblePet = {
+    left: petPosition.x + (petInsets.left ?? 0),
+    right: petPosition.x + petSize - (petInsets.right ?? 0),
+    top: petPosition.y + (petInsets.top ?? 0),
+    bottom: petPosition.y + petSize - (petInsets.bottom ?? 0),
+  };
+  const visiblePetCenterX = (visiblePet.left + visiblePet.right) / 2;
+  const availableAbove = Math.max(0, visiblePet.top - topEdge - gap);
+  const availableBelow = Math.max(0, bottomEdge - visiblePet.bottom - gap);
+  const placement = availableAbove >= menuSize.height
+    || (availableBelow < menuSize.height && availableAbove >= availableBelow)
+    ? "above"
+    : "below";
+  const availableHeight = placement === "above"
+    ? availableAbove
+    : availableBelow;
+  const renderedMenuSize = {
+    width: Math.min(menuSize.width, workArea.width),
+    height: Math.min(menuSize.height, availableHeight),
+  };
+  const menuPosition = {
+    x: Math.round(clamp(
+      visiblePetCenterX - renderedMenuSize.width / 2,
+      leftEdge,
+      rightEdge - renderedMenuSize.width,
+    )),
+    y: placement === "above"
+      ? visiblePet.top - gap - renderedMenuSize.height
+      : visiblePet.bottom + gap,
+  };
+  const windowPosition = {
+    x: Math.min(petPosition.x, menuPosition.x),
+    y: Math.min(petPosition.y, menuPosition.y),
+  };
+  const windowSize = {
+    width: Math.max(
+      petPosition.x + petSize,
+      menuPosition.x + renderedMenuSize.width,
+    ) - windowPosition.x,
+    height: Math.max(
+      petPosition.y + petSize,
+      menuPosition.y + renderedMenuSize.height,
+    ) - windowPosition.y,
+  };
+
+  return {
+    placement,
+    windowPosition,
+    windowSize,
+    petOffset: {
+      x: petPosition.x - windowPosition.x,
+      y: petPosition.y - windowPosition.y,
+    },
+    menuOffset: {
+      x: menuPosition.x - windowPosition.x,
+      y: menuPosition.y - windowPosition.y,
+    },
+    menuSize: renderedMenuSize,
   };
 }
 

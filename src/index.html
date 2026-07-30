@@ -38,7 +38,8 @@
       border-radius: 10px;
       padding: 6px 10px;
       box-sizing: border-box;
-      font: 12px -apple-system, "PingFang SC", sans-serif;
+      font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
       line-height: 1.35;
       color: #1a1a1a;
       text-align: center;
@@ -65,7 +66,8 @@
       background: rgba(0, 0, 0, 0.55);
       border-radius: 6px;
       padding: 2px 7px;
-      font: 11px -apple-system, monospace;
+      font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", monospace;
       color: #fff;
       white-space: nowrap;
       z-index: 100;
@@ -83,7 +85,8 @@
       box-sizing: border-box;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
       z-index: 999;
-      font: 13px -apple-system, "PingFang SC", sans-serif;
+      font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
       color: #1a1a1a;
     }
     #ctxMenu::-webkit-scrollbar { width: 6px; }
@@ -125,7 +128,8 @@
       padding: 4px 0;
       min-width: 130px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-      font: 13px -apple-system, "PingFang SC", sans-serif;
+      font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
       color: #1a1a1a;
       z-index: 1000;
     }
@@ -133,11 +137,17 @@
     .submenu .item:hover { background: rgba(0, 122, 255, 0.1); }
     .submenu .sep { height: 1px; margin: 4px 0; background: rgba(0,0,0,0.1); }
     /* pomodoro inline config panel (shown inside the scrollable ctxMenu) */
-    .pomo-panel { padding: 6px 14px; }
-    .pomo-panel .preset-row { display: flex; gap: 4px; margin: 6px 0; }
+    .pomo-panel { min-width: 0; padding: 6px 14px; box-sizing: border-box; }
+    .pomo-panel .preset-row {
+      display: flex;
+      min-width: 0;
+      gap: 4px;
+      margin: 6px 0;
+    }
     .pomo-panel .preset-btn {
-      flex: 1; padding: 4px 0; border: 1px solid rgba(0,0,0,0.15);
+      flex: 1; min-width: 0; padding: 4px 0; border: 1px solid rgba(0,0,0,0.15);
       border-radius: 5px; background: #fff; font-size: 11px; cursor: pointer;
+      box-sizing: border-box;
     }
     .pomo-panel .preset-btn.active { background: #007aff; color: #fff; border-color: #007aff; }
     .pomo-panel .field { margin: 8px 0; }
@@ -146,16 +156,21 @@
       font-size: 11px; margin-bottom: 3px; color: #555;
     }
     .pomo-panel .field-label .val { color: #007aff; font-weight: 500; }
-    .pomo-panel input[type=range] { width: 100%; margin: 0; }
+    .pomo-panel input[type=range] {
+      width: 100%; min-width: 0; max-width: 100%; margin: 0;
+      box-sizing: border-box;
+    }
     .pomo-panel .select-row { margin: 8px 0; font-size: 11px; color: #555; }
     .pomo-panel .select-row select {
-      width: 100%; padding: 3px 4px; margin-top: 3px;
+      width: 100%; min-width: 0; max-width: 100%; padding: 3px 4px; margin-top: 3px;
       border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 12px;
+      box-sizing: border-box;
     }
-    .pomo-panel .actions { display: flex; gap: 6px; margin-top: 10px; }
+    .pomo-panel .actions { display: flex; min-width: 0; gap: 6px; margin-top: 10px; }
     .pomo-panel .actions button {
-      flex: 1; padding: 5px 0; border: 1px solid rgba(0,0,0,0.15);
+      flex: 1; min-width: 0; padding: 5px 0; border: 1px solid rgba(0,0,0,0.15);
       border-radius: 5px; background: #fff; font-size: 12px; cursor: pointer;
+      box-sizing: border-box;
     }
     .pomo-panel .actions button.primary {
       background: #007aff; color: #fff; border-color: #007aff;
@@ -171,7 +186,8 @@
       border-radius: 12px;
       padding: 7px;
       box-sizing: border-box;
-      font: 9px -apple-system, "PingFang SC", monospace;
+      font: 9px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", monospace;
       color: #30343b;
       overflow: visible;
       z-index: 50;
@@ -222,8 +238,8 @@
       color: #1677c8;
       font-weight: 600;
     }
-    #kbBoard { display: flex; flex-direction: column; gap: 1px; }
-    .kb-row { display: flex; gap: 1px; }
+    #kbBoard { display: flex; width: 100%; min-width: 0; flex-direction: column; gap: 1px; }
+    .kb-row { display: flex; width: 100%; min-width: 0; gap: 1px; }
     .kb-key {
       flex: 1;
       height: 14px;
@@ -238,6 +254,8 @@
       color: #626973;
       transition: background 0.05s;
       box-sizing: border-box;
+      overflow: hidden;
+      white-space: nowrap;
     }
     .kb-key.wide-2 { flex: 2; }
     .kb-key.wide-3 { flex: 3; }
