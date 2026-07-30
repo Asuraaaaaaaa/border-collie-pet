@@ -523,6 +523,10 @@ test("renders the simulated keyboard as a compact speech bubble", () => {
     html.indexOf("#timer"),
     html.indexOf("#ctxMenu"),
   );
+  const keyboardStyles = html.slice(
+    html.indexOf("#kbPanel {"),
+    html.indexOf("#kbPanel::after"),
+  );
 
   assert.match(
     keyboard,
@@ -532,6 +536,8 @@ test("renders the simulated keyboard as a compact speech bubble", () => {
   assert.match(keyboard, /scrollWidth/);
   assert.match(keyboard, /panel\.dataset\.placement\s*=\s*rect\.placement/);
   assert.match(keyboard, /--pointer-offset/);
+  assert.match(keyboardStyles, /display:\s*none/);
+  assert.doesNotMatch(html, /<div id="kbPanel"[^>]*style=/);
   assert.match(html, /#kbPanel::after/);
   assert.match(html, /#kbPanel\[data-placement="above"\]::after/);
   assert.match(timerStyles, /white-space:\s*nowrap/);
