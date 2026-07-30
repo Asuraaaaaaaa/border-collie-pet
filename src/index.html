@@ -13,6 +13,7 @@
       user-select: none;
       -webkit-user-select: none;
     }
+    [hidden] { display: none !important; }
     #pet {
       position: absolute;
       left: 0;
@@ -24,6 +25,13 @@
     }
     #pet.flip {
       transform: scaleX(-1);
+    }
+    #pet.memo-due {
+      animation: memo-pet-pulse 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes memo-pet-pulse {
+      from { filter: drop-shadow(0 0 2px rgba(255, 59, 48, 0.25)); }
+      to { filter: drop-shadow(0 0 10px rgba(255, 59, 48, 0.95)) brightness(1.12); }
     }
     #bubble {
       position: absolute;
@@ -107,12 +115,19 @@
       margin: 4px 0;
       background: rgba(0, 0, 0, 0.1);
     }
+    #ctxMenu .check::before,
+    #ctxMenu .uncheck::before {
+      display: inline-block;
+      width: 1em;
+      margin-right: 4px;
+      text-align: center;
+    }
     #ctxMenu .check::before {
-      content: "\2713  ";
+      content: "\2713";
       color: #34c759;
     }
     #ctxMenu .uncheck::before {
-      content: "\2003  ";
+      content: "";
     }
     #ctxMenu .has-sub::after {
       content: " \25B6";
@@ -174,6 +189,258 @@
     }
     .pomo-panel .actions button.primary {
       background: #007aff; color: #fff; border-color: #007aff;
+    }
+    #memoItem {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    #memoCount {
+      min-width: 18px;
+      margin-left: 12px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      box-sizing: border-box;
+      background: #ff3b30;
+      color: #fff;
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+    }
+    .memo-panel {
+      min-width: 0;
+      padding: 6px 12px 10px;
+      box-sizing: border-box;
+    }
+    .memo-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+      margin-bottom: 5px;
+      color: #555;
+      font-size: 11px;
+    }
+    .memo-icon-btn {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: 1px solid rgba(0, 0, 0, 0.14);
+      border-radius: 5px;
+      box-sizing: border-box;
+      background: #fff;
+      color: #333;
+      font: 16px/24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+    }
+    .memo-icon-btn:hover { background: rgba(0, 122, 255, 0.08); }
+    .memo-list {
+      max-height: 190px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .memo-empty {
+      padding: 12px 4px;
+      color: #888;
+      font-size: 11px;
+      text-align: center;
+    }
+    .memo-row {
+      min-width: 0;
+      padding: 7px 0;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .memo-row:first-child { border-top: 0; }
+    .memo-row-content {
+      color: #222;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .memo-row-time {
+      margin-top: 3px;
+      color: #737373;
+      font-size: 10px;
+    }
+    .memo-row.overdue .memo-row-time {
+      color: #d70015;
+      font-weight: 600;
+    }
+    .memo-row-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
+      margin-top: 5px;
+    }
+    .memo-row-actions .memo-icon-btn {
+      width: 24px;
+      height: 24px;
+      font-size: 13px;
+      line-height: 22px;
+    }
+    .memo-row-actions .complete { color: #248a3d; }
+    .memo-row-actions .delete { color: #d70015; }
+    .memo-form {
+      min-width: 0;
+      padding-top: 5px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .memo-form-title {
+      margin-bottom: 5px;
+      color: #333;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .memo-form textarea,
+    .memo-form input[type="datetime-local"] {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      border: 1px solid rgba(0, 0, 0, 0.18);
+      border-radius: 5px;
+      padding: 6px 7px;
+      box-sizing: border-box;
+      background: #fff;
+      color: #222;
+      font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    }
+    .memo-form textarea {
+      height: 62px;
+      margin-bottom: 6px;
+      resize: none;
+      line-height: 1.4;
+    }
+    .memo-error {
+      min-height: 15px;
+      margin-top: 3px;
+      color: #d70015;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .memo-form-actions {
+      display: flex;
+      min-width: 0;
+      gap: 6px;
+      margin-top: 3px;
+    }
+    .memo-form-actions button {
+      flex: 1;
+      min-width: 0;
+      padding: 5px 0;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      border-radius: 5px;
+      box-sizing: border-box;
+      background: #fff;
+      color: #333;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .memo-form-actions .primary {
+      border-color: #007aff;
+      background: #007aff;
+      color: #fff;
+    }
+    #memoAlert {
+      position: fixed;
+      display: none;
+      width: 280px;
+      min-height: 144px;
+      padding: 13px;
+      border: 2px solid #ff3b30;
+      border-radius: 8px;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.99);
+      color: #1f1f1f;
+      font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      z-index: 1100;
+      --pointer-offset: 50%;
+      animation: memo-alert-pulse 1.1s ease-in-out infinite alternate;
+    }
+    @keyframes memo-alert-pulse {
+      from { box-shadow: 0 4px 16px rgba(215, 0, 21, 0.3), 0 0 0 1px rgba(255, 59, 48, 0.25); }
+      to { box-shadow: 0 6px 22px rgba(215, 0, 21, 0.52), 0 0 0 6px rgba(255, 59, 48, 0.16); }
+    }
+    #memoAlert::after {
+      content: "";
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border: solid #ff3b30;
+      background: #fff;
+      transform: rotate(45deg);
+    }
+    #memoAlert[data-placement="above"]::after {
+      left: var(--pointer-offset); bottom: -8px; margin-left: -7px;
+      border-width: 0 2px 2px 0;
+    }
+    #memoAlert[data-placement="below"]::after {
+      left: var(--pointer-offset); top: -8px; margin-left: -7px;
+      border-width: 2px 0 0 2px;
+    }
+    #memoAlert[data-placement="right"]::after {
+      left: -8px; top: var(--pointer-offset); margin-top: -7px;
+      border-width: 0 0 2px 2px;
+    }
+    #memoAlert[data-placement="left"]::after {
+      right: -8px; top: var(--pointer-offset); margin-top: -7px;
+      border-width: 2px 2px 0 0;
+    }
+    .memo-alert-heading {
+      color: #d70015;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    #memoAlertContent {
+      max-height: 88px;
+      margin-top: 7px;
+      overflow-y: auto;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .memo-alert-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      color: #737373;
+      font-size: 10px;
+    }
+    .memo-alert-actions,
+    .memo-snooze-options {
+      display: flex;
+      min-width: 0;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .memo-alert-actions button,
+    .memo-snooze-options button {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid rgba(0, 0, 0, 0.16);
+      border-radius: 5px;
+      padding: 6px 4px;
+      box-sizing: border-box;
+      background: #fff;
+      color: #333;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    #memoComplete {
+      border-color: #248a3d;
+      background: #248a3d;
+      color: #fff;
+    }
+    .memo-snooze-options button {
+      padding: 5px 2px;
+      font-size: 10px;
     }
     #kbPanel {
       position: fixed;
@@ -333,6 +600,24 @@
       <button id="kbRetry" type="button" hidden>重试</button>
     </div>
   </div>
+  <div id="memoAlert" role="alertdialog" aria-live="assertive" aria-modal="false">
+    <div class="memo-alert-heading">备忘录到期</div>
+    <div id="memoAlertContent"></div>
+    <div class="memo-alert-meta">
+      <span id="memoAlertDue"></span>
+      <span id="memoAlertQueue"></span>
+    </div>
+    <div class="memo-alert-actions">
+      <button id="memoComplete" type="button">完成</button>
+      <button id="memoSnooze" type="button" aria-expanded="false" aria-controls="memoSnoozeOptions">稍后提醒</button>
+    </div>
+    <div id="memoSnoozeOptions" class="memo-snooze-options" hidden>
+      <button type="button" data-minutes="5">5 分钟</button>
+      <button type="button" data-minutes="15">15 分钟</button>
+      <button type="button" data-minutes="30">30 分钟</button>
+      <button type="button" data-minutes="60">1 小时</button>
+    </div>
+  </div>
   <div id="ctxMenu">
     <div class="item uncheck" data-act="pomodoro" id="pomodoroItem">番茄钟</div>
     <div class="pomo-panel" id="pomoPanel" style="display:none">
@@ -367,6 +652,26 @@
         <button data-act="pomoCancel">取消</button>
         <button data-act="pomoStart" class="primary">开始</button>
       </div>
+    </div>
+    <div class="item uncheck" data-act="memo" id="memoItem">
+      <span>备忘录</span><span id="memoCount" hidden>0</span>
+    </div>
+    <div class="memo-panel" id="memoPanel" style="display:none">
+      <div class="memo-toolbar">
+        <span>未完成</span>
+        <button id="memoAdd" class="memo-icon-btn" type="button" title="新建备忘录" aria-label="新建备忘录">+</button>
+      </div>
+      <div id="memoList" class="memo-list"></div>
+      <form id="memoForm" class="memo-form" hidden>
+        <div id="memoFormTitle" class="memo-form-title">新建备忘录</div>
+        <textarea id="memoContent" maxlength="200" placeholder="输入备忘内容" aria-label="备忘内容"></textarea>
+        <input id="memoDueAt" type="datetime-local" aria-label="到期时间">
+        <div id="memoError" class="memo-error" aria-live="polite"></div>
+        <div class="memo-form-actions">
+          <button id="memoCancel" type="button">取消</button>
+          <button type="submit" class="primary">保存</button>
+        </div>
+      </form>
     </div>
     <div class="item uncheck" data-act="water" id="waterItem">喝水提醒</div>
     <div class="sep"></div>

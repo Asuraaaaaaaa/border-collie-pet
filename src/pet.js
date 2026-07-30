@@ -14,11 +14,20 @@ import {
   calculateMenuLayout,
   calculateKeyboardLayout,
   clampPetPosition,
+  completeMemo,
+  createMemo,
   createLatestTaskQueue,
   defaultPetPosition,
+  deleteMemo,
+  getActiveMemos,
+  getNextDueMemo,
   monitorWorkAreaToLogical,
+  parseMemos,
   pomodoroResumePose,
   resolvePanelSize,
+  snoozeMemo,
+  updateMemo,
+  windowPositionForPet,
 } from "./logic.js";
 
 const T = window.__TAURI__;
@@ -35,9 +44,13 @@ const FOCUS_POSE_VISUAL_INSETS = {
 };
 const MENU_MIN_SIZE = { width: 220, height: 0 };
 const MENU_MAX_WIDTH = 360;
+const MEMO_STORAGE_KEY = "linePuppyMemos";
+const MEMO_ALERT_MIN_SIZE = { width: 280, height: 144 };
+const MEMO_ALERT_MAX_SIZE = { width: 360, height: 280 };
 let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
 let keyboardVisible = false;
 let keyboardPanelSize = { ...KEYBOARD_PANEL_MIN_SIZE };
+let memoAlertSize = { ...MEMO_ALERT_MIN_SIZE };
 const W = () => size;
 const TICK_MS = 33;
 
@@ -81,6 +94,24 @@ const pomoPoseSelect = document.getElementById("pomoPose");
 const workVal = document.getElementById("workVal");
 const breakVal = document.getElementById("breakVal");
 const roundsVal = document.getElementById("roundsVal");
+const memoItem = document.getElementById("memoItem");
+const memoCount = document.getElementById("memoCount");
+const memoPanel = document.getElementById("memoPanel");
+const memoList = document.getElementById("memoList");
+const memoAdd = document.getElementById("memoAdd");
+const memoForm = document.getElementById("memoForm");
+const memoFormTitle = document.getElementById("memoFormTitle");
+const memoContent = document.getElementById("memoContent");
+const memoDueAt = document.getElementById("memoDueAt");
+const memoError = document.getElementById("memoError");
+const memoCancel = document.getElementById("memoCancel");
+const memoAlert = document.getElementById("memoAlert");
+const memoAlertContent = document.getElementById("memoAlertContent");
+const memoAlertDue = document.getElementById("memoAlertDue");
+const memoAlertQueue = document.getElementById("memoAlertQueue");
+const memoCompleteButton = document.getElementById("memoComplete");
+const memoSnoozeButton = document.getElementById("memoSnooze");
+const memoSnoozeOptions = document.getElementById("memoSnoozeOptions");
 
 let state = "idle";
 let frameIdx = 0;
@@ -91,6 +122,10 @@ let dir = 1;
 let pos = { x: 0, y: 0 };
 let bounds = { x: 0, y: 0, width: 1280, height: 800 };
 let menuOpen = false;
+let memos = parseMemos(localStorage.getItem(MEMO_STORAGE_KEY));
+let activeMemo = null;
+let activeMemoSignature = "";
+let editingMemoId = null;
 const reportedWindowErrors = new Set();
 
 function reportWindowErrorOnce(operation, error) {
@@ -146,9 +181,75 @@ function scaledPetInsets(pose) {
   );
 }
 
+function measureMemoAlert() {
+  memoAlert.style.width = `${MEMO_ALERT_MIN_SIZE.width}px`;
+  memoAlert.style.height = "auto";
+  memoAlertSize = resolvePanelSize(
+    {
+      clientWidth: memoAlert.clientWidth,
+      clientHeight: memoAlert.clientHeight,
+      offsetWidth: memoAlert.offsetWidth,
+      offsetHeight: memoAlert.offsetHeight,
+      scrollWidth: memoAlert.scrollWidth,
+      scrollHeight: memoAlert.scrollHeight,
+    },
+    MEMO_ALERT_MIN_SIZE,
+    {
+      width: Math.min(MEMO_ALERT_MAX_SIZE.width, bounds.width),
+      height: Math.min(MEMO_ALERT_MAX_SIZE.height, bounds.height),
+    },
+  );
+  memoAlert.style.width = `${memoAlertSize.width}px`;
+  memoAlert.style.height = `${memoAlertSize.height}px`;
+  return memoAlertSize;
+}
+
+function setMemoAlertRect(rect) {
+  memoAlert.style.left = `${rect.x}px`;
+  memoAlert.style.top = `${rect.y}px`;
+  memoAlert.style.width = `${rect.width}px`;
+  memoAlert.style.height = `${rect.height}px`;
+  memoAlert.dataset.placement = rect.placement;
+  memoAlert.style.setProperty("--pointer-offset", `${rect.pointerOffset}px`);
+}
+
 async function applyWindowLayout() {
   if (menuOpen) return;
   pos = clampPetPosition(pos, size, bounds);
+
+  if (activeMemo) {
+    memoAlert.style.display = "block";
+    const panelSize = measureMemoAlert();
+    const petInsets = scaledPetInsets("wag");
+    const layout = calculateKeyboardLayout({
+      petPosition: pos,
+      petSize: size,
+      petInsets,
+      panelSize,
+      workArea: bounds,
+    });
+    img.style.left = `${layout.petOffset.x}px`;
+    img.style.top = `${layout.petOffset.y}px`;
+    bubble.style.left = `${layout.petOffset.x + size / 2}px`;
+    bubble.style.top = `${layout.petOffset.y + petInsets.top - 4}px`;
+    timerEl.style.left = `${layout.petOffset.x + size - 4}px`;
+    timerEl.style.top = `${layout.petOffset.y + 4}px`;
+    timerEl.style.right = "auto";
+    timerEl.style.transform = "translateX(-100%)";
+    setMemoAlertRect({
+      x: layout.panelOffset.x,
+      y: layout.panelOffset.y,
+      width: panelSize.width,
+      height: panelSize.height,
+      placement: layout.placement,
+      pointerOffset: layout.pointerOffset,
+    });
+    await scheduleWindowGeometry({
+      size: layout.windowSize,
+      position: layout.windowPosition,
+    });
+    return;
+  }
 
   if (!keyboardVisible) {
     img.style.left = "0";
@@ -198,10 +299,24 @@ async function applyWindowLayout() {
 
 let bubbleTimer = null;
 function showBubble(text, ms = 4000) {
+  if (activeMemo) return;
   bubble.textContent = text;
   bubble.style.display = "block";
   clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(() => { bubble.style.display = "none"; }, ms);
+}
+
+function resumeKeyboardIfAllowed() {
+  if (activeMemo) {
+    suspendKeyboard();
+    return;
+  }
+  resumeKeyboard();
+}
+
+function showKeyboardForPomodoro(options) {
+  showKeyboard(options);
+  if (activeMemo) suspendKeyboard();
 }
 
 let animTimer = null;
@@ -248,7 +363,8 @@ function pickNextFromPhase() {
 
 let lockedState = null;
 function enter(s) {
-  if (lockedState && s !== "drag" && s !== lockedState) s = lockedState;
+  if (activeMemo && s !== "drag" && s !== "wag") s = "wag";
+  else if (lockedState && s !== "drag" && s !== lockedState) s = lockedState;
   state = s;
   stateTimer = 0;
   idleStreak = s === "idle" ? idleStreak : 0;
@@ -360,7 +476,7 @@ function startPomodoro() {
   enter(pomoConfig.pose);
   timerEl.style.display = "block";
   timerEl.textContent = fmtTime(pomodoro.remaining);
-  showKeyboard({ reset: true });
+  showKeyboardForPomodoro({ reset: true });
   showBubble("开始专注! " + pomoConfig.work + "分钟 (第1/" + pomoConfig.rounds + "轮)", 3500);
 }
 
@@ -399,7 +515,7 @@ function endPomodoroPhase() {
     pomodoro.phase = "work";
     pomodoro.remaining = pomoConfig.work * 60;
     lockedState = pomoConfig.pose;
-    showKeyboard({ reset: true });
+    showKeyboardForPomodoro({ reset: true });
     showBubble("第 " + pomodoro.round + "/" + pomoConfig.rounds + " 轮,开始专注!", 3500);
     enter(pomoConfig.pose);
   }
@@ -464,10 +580,281 @@ if (navigator.getBattery) {
   });
 }
 
+// ---------- memos ----------
+const memoDateFormatter = new Intl.DateTimeFormat("zh-CN", {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatMemoDue(timestamp) {
+  return memoDateFormatter.format(new Date(timestamp));
+}
+
+function toDatetimeLocalValue(timestamp) {
+  const date = new Date(timestamp);
+  return new Date(timestamp - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+function defaultMemoDueAt(now = Date.now()) {
+  const date = new Date(now + 30 * 60_000);
+  date.setSeconds(0, 0);
+  const remainder = date.getMinutes() % 5;
+  if (remainder) date.setMinutes(date.getMinutes() + 5 - remainder);
+  return date.getTime();
+}
+
+function newMemoId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `memo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function replaceMemos(nextMemos) {
+  try {
+    const persistedMemos = getActiveMemos(nextMemos);
+    localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(persistedMemos));
+    memos = persistedMemos;
+    renderMemoCount();
+    if (memoPanel.style.display === "block") renderMemoList();
+    return true;
+  } catch (error) {
+    console.error("[memo] failed to save:", error);
+    return false;
+  }
+}
+
+function renderMemoCount() {
+  const count = getActiveMemos(memos).length;
+  memoCount.textContent = String(count);
+  memoCount.hidden = count === 0;
+  memoItem.title = count ? `${count} 条未完成备忘录` : "备忘录";
+}
+
+function createMemoAction(symbol, title, action, id, className = "") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `memo-icon-btn ${className}`.trim();
+  button.textContent = symbol;
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.dataset.memoAction = action;
+  button.dataset.memoId = id;
+  return button;
+}
+
+function renderMemoList() {
+  const activeMemos = getActiveMemos(memos);
+  memoList.replaceChildren();
+  if (!activeMemos.length) {
+    const empty = document.createElement("div");
+    empty.className = "memo-empty";
+    empty.textContent = "还没有备忘录";
+    memoList.appendChild(empty);
+    return;
+  }
+
+  const now = Date.now();
+  for (const memo of activeMemos) {
+    const row = document.createElement("div");
+    row.className = `memo-row${memo.dueAt <= now ? " overdue" : ""}`;
+
+    const content = document.createElement("div");
+    content.className = "memo-row-content";
+    content.textContent = memo.content;
+
+    const due = document.createElement("div");
+    due.className = "memo-row-time";
+    due.textContent = `${memo.dueAt <= now ? "已到期" : "到期"} · ${formatMemoDue(memo.dueAt)}`;
+
+    const actions = document.createElement("div");
+    actions.className = "memo-row-actions";
+    actions.append(
+      createMemoAction("✓", "完成", "complete", memo.id, "complete"),
+      createMemoAction("✎", "编辑", "edit", memo.id),
+      createMemoAction("×", "删除", "delete", memo.id, "delete"),
+    );
+    row.append(content, due, actions);
+    memoList.appendChild(row);
+  }
+}
+
+function openMemoForm(id = null) {
+  editingMemoId = id;
+  memoError.textContent = "";
+  memoForm.hidden = false;
+  memoList.hidden = true;
+  memoAdd.hidden = true;
+  const minimumDueAt = Math.ceil(Date.now() / 60_000) * 60_000;
+  memoDueAt.min = toDatetimeLocalValue(minimumDueAt);
+
+  if (id) {
+    const memo = memos.find((item) => item.id === id);
+    if (!memo) return;
+    memoFormTitle.textContent = "编辑备忘录";
+    memoContent.value = memo.content;
+    memoDueAt.value = toDatetimeLocalValue(memo.dueAt);
+  } else {
+    memoFormTitle.textContent = "新建备忘录";
+    memoContent.value = "";
+    memoDueAt.value = toDatetimeLocalValue(defaultMemoDueAt());
+  }
+  setTimeout(() => memoContent.focus(), 0);
+  void layoutContextMenu();
+}
+
+function closeMemoForm() {
+  editingMemoId = null;
+  memoForm.hidden = true;
+  memoList.hidden = false;
+  memoAdd.hidden = false;
+  memoError.textContent = "";
+}
+
+function resumePetAfterMemo() {
+  if (dragging) return;
+  if (pomodoro.active && pomodoro.phase === "work") enter(pomoConfig.pose);
+  else if (getTimePhase() === "night") enter("sleep");
+  else enter("idle");
+}
+
+function checkDueMemos() {
+  const now = Date.now();
+  const dueMemos = getActiveMemos(memos).filter((memo) => memo.dueAt <= now);
+  const nextMemo = getNextDueMemo(memos, now);
+  const previousMemo = activeMemo;
+  activeMemo = nextMemo;
+
+  if (!activeMemo) {
+    if (!previousMemo) return;
+    activeMemoSignature = "";
+    memoAlert.style.display = "none";
+    memoSnoozeOptions.hidden = true;
+    img.classList.remove("memo-due");
+    if (!menuOpen) resumeKeyboardIfAllowed();
+    resumePetAfterMemo();
+    void applyWindowLayout();
+    return;
+  }
+
+  const signature = `${activeMemo.id}:${activeMemo.updatedAt}:${dueMemos.length}`;
+  const reminderChanged = signature !== activeMemoSignature;
+  if (reminderChanged) {
+    activeMemoSignature = signature;
+    memoAlertContent.textContent = activeMemo.content;
+    memoAlertDue.textContent = `到期：${formatMemoDue(activeMemo.dueAt)}`;
+    memoAlertQueue.textContent = dueMemos.length > 1
+      ? `还有 ${dueMemos.length - 1} 条待处理`
+      : "";
+    memoSnoozeOptions.hidden = true;
+    memoSnoozeButton.setAttribute("aria-expanded", "false");
+  }
+  if (reminderChanged && memoPanel.style.display === "block") renderMemoList();
+  bubble.style.display = "none";
+  clearTimeout(bubbleTimer);
+  img.classList.add("memo-due");
+
+  if (menuOpen) {
+    void closeMenu();
+    return;
+  }
+  memoAlert.style.display = "block";
+  if (!previousMemo) suspendKeyboard();
+  if (!dragging && state !== "wag") enter("wag");
+  if (!previousMemo || reminderChanged) void applyWindowLayout();
+}
+
+memoAdd.addEventListener("click", (event) => {
+  event.stopPropagation();
+  openMemoForm();
+});
+
+memoCancel.addEventListener("click", (event) => {
+  event.stopPropagation();
+  closeMemoForm();
+  void layoutContextMenu();
+});
+
+memoForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  const now = Date.now();
+  const dueAt = new Date(memoDueAt.value).getTime();
+  try {
+    const nextMemos = editingMemoId
+      ? updateMemo(memos, editingMemoId, { content: memoContent.value, dueAt }, now)
+      : [...memos, createMemo({
+          id: newMemoId(),
+          content: memoContent.value,
+          dueAt,
+          now,
+        })];
+    if (!replaceMemos(nextMemos)) {
+      memoError.textContent = "保存失败，请重试";
+      return;
+    }
+    closeMemoForm();
+    renderMemoList();
+    checkDueMemos();
+    await layoutContextMenu();
+  } catch (error) {
+    memoError.textContent = error.message || "请检查备忘内容和到期时间";
+    await layoutContextMenu();
+  }
+});
+
+memoList.addEventListener("click", async (event) => {
+  event.stopPropagation();
+  const button = event.target.closest("button[data-memo-action]");
+  if (!button) return;
+  const { memoAction, memoId } = button.dataset;
+  if (memoAction === "edit") {
+    openMemoForm(memoId);
+    return;
+  }
+  const nextMemos = memoAction === "complete"
+    ? completeMemo(memos, memoId)
+    : deleteMemo(memos, memoId);
+  if (!replaceMemos(nextMemos)) return;
+  checkDueMemos();
+  await layoutContextMenu();
+});
+
+memoCompleteButton.addEventListener("click", () => {
+  if (!activeMemo) return;
+  const nextMemos = completeMemo(memos, activeMemo.id);
+  if (!replaceMemos(nextMemos)) return;
+  checkDueMemos();
+});
+
+memoSnoozeButton.addEventListener("click", () => {
+  memoSnoozeOptions.hidden = !memoSnoozeOptions.hidden;
+  memoSnoozeButton.setAttribute(
+    "aria-expanded",
+    String(!memoSnoozeOptions.hidden),
+  );
+  void applyWindowLayout();
+});
+
+memoSnoozeOptions.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-minutes]");
+  if (!button || !activeMemo) return;
+  const minutes = parseInt(button.dataset.minutes);
+  const nextMemos = snoozeMemo(memos, activeMemo.id, minutes);
+  if (!replaceMemos(nextMemos)) return;
+  checkDueMemos();
+});
+
 // ---------- manual drag ----------
 let dragging = false;
 let grab = { x: 0, y: 0 };
 let downScreen = { x: 0, y: 0 };
+let dragWindowOffset = { x: 0, y: 0 };
 
 img.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
@@ -477,6 +864,7 @@ img.addEventListener("mousedown", (e) => {
   grab = { x: e.screenX - pos.x, y: e.screenY - pos.y };
   downScreen = { x: e.screenX, y: e.screenY };
   suspendKeyboard();
+  dragWindowOffset = { x: img.offsetLeft, y: img.offsetTop };
   if (pomodoro.active && pomodoro.phase === "work") {
     lockedState = null;
   }
@@ -487,7 +875,7 @@ window.addEventListener("mousemove", (e) => {
   if (!dragging || !(e.buttons & 1)) return;
   pos.x = e.screenX - grab.x;
   pos.y = e.screenY - grab.y;
-  void setWindowPosition(pos);
+  void setWindowPosition(windowPositionForPet(pos, dragWindowOffset));
 });
 
 window.addEventListener("mouseup", async (e) => {
@@ -496,7 +884,7 @@ window.addEventListener("mouseup", async (e) => {
   const moved = Math.abs(e.screenX - downScreen.x) > 4 || Math.abs(e.screenY - downScreen.y) > 4;
   await refreshMonitorBounds();
   pos = clampPetPosition(pos, size, bounds);
-  resumeKeyboard();
+  resumeKeyboardIfAllowed();
   await applyWindowLayout();
   if (pomodoro.active && pomodoro.phase === "work") {
     const resumePose = pomodoroResumePose(pomoConfig.pose);
@@ -581,14 +969,22 @@ async function closeMenu() {
   if (!menuOpen) return;
   ctxMenu.style.display = "none";
   pomoPanel.style.display = "none";
+  memoPanel.style.display = "none";
+  closeMemoForm();
   document.getElementById("interactPanel").style.display = "none";
   menuOpen = false;
-  resumeKeyboard();
+  if (activeMemo) {
+    memoAlert.style.display = "block";
+    if (!dragging) enter("wag");
+  } else {
+    resumeKeyboardIfAllowed();
+  }
   await applyWindowLayout();
 }
 
 img.addEventListener("contextmenu", (e) => {
   e.preventDefault();
+  if (activeMemo) return;
   if (menuOpen) { void closeMenu(); return; }
   void openMenu();
 });
@@ -606,10 +1002,11 @@ document.addEventListener("contextmenu", (e) => {
 
 ctxMenu.addEventListener("click", async (e) => {
   e.stopPropagation();
-  const act = e.target.dataset.act;
-  if (!act) return;
+  const actionTarget = e.target.closest("[data-act]");
+  if (!actionTarget || !ctxMenu.contains(actionTarget)) return;
+  const act = actionTarget.dataset.act;
   // actions that should NOT close the menu (they open sub-panels)
-  const keepOpen = act === "pomodoro" || act === "interact";
+  const keepOpen = act === "pomodoro" || act === "memo" || act === "interact";
   if (!keepOpen) await closeMenu();
   switch (act) {
     case "pomodoro":
@@ -619,6 +1016,9 @@ ctxMenu.addEventListener("click", async (e) => {
       } else {
         // toggle inline panel; keep menu open so user can interact with it
         const isOpen = pomoPanel.style.display === "block";
+        memoPanel.style.display = "none";
+        closeMemoForm();
+        document.getElementById("interactPanel").style.display = "none";
         pomoPanel.style.display = isOpen ? "none" : "block";
         if (!isOpen) {
           // sync controls with saved config
@@ -634,9 +1034,22 @@ ctxMenu.addEventListener("click", async (e) => {
         await layoutContextMenu();
       }
       break;
+    case "memo": {
+      const isMemoOpen = memoPanel.style.display === "block";
+      pomoPanel.style.display = "none";
+      document.getElementById("interactPanel").style.display = "none";
+      closeMemoForm();
+      memoPanel.style.display = isMemoOpen ? "none" : "block";
+      if (!isMemoOpen) renderMemoList();
+      await layoutContextMenu();
+      break;
+    }
     case "interact":
       // toggle the interaction sub-list
       const panel = document.getElementById("interactPanel");
+      pomoPanel.style.display = "none";
+      memoPanel.style.display = "none";
+      closeMemoForm();
       panel.style.display = panel.style.display === "none" ? "block" : "none";
       await layoutContextMenu();
       break;
@@ -750,6 +1163,8 @@ async function init() {
   await refreshMonitorBounds(true);
   pos = defaultPetPosition(bounds, W());
   await applySize();
+  renderMemoCount();
+  checkDueMemos();
 
   const phase = getTimePhase();
   if (phase === "night") {
@@ -763,6 +1178,12 @@ async function init() {
     enter("idle");
   }
   setInterval(tick, TICK_MS);
+  setInterval(checkDueMemos, 1000);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) checkDueMemos();
+});
+window.addEventListener("focus", checkDueMemos);
 
 init();

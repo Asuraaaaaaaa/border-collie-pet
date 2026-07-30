@@ -116,6 +116,13 @@ export function clampPetPosition(position, petSize, workArea) {
   };
 }
 
+export function windowPositionForPet(petPosition, petOffset = {}) {
+  return {
+    x: petPosition.x - (petOffset.x ?? 0),
+    y: petPosition.y - (petOffset.y ?? 0),
+  };
+}
+
 export function defaultPetPosition(workArea, petSize, margins = {}) {
   const right = margins.right ?? 120;
   const bottom = margins.bottom ?? 90;
@@ -379,4 +386,97 @@ export function resetKeyboardState(state) {
 
 export function setKeyboardSuspended(state, suspended) {
   return { ...state, suspended };
+}
+
+function isValidTimestamp(value) {
+  return Number.isFinite(value) && !Number.isNaN(new Date(value).getTime());
+}
+
+function normalizeMemo(record) {
+  if (
+    !record
+    || typeof record.id !== "string"
+    || !record.id
+    || typeof record.content !== "string"
+    || !record.content.trim()
+    || !isValidTimestamp(record.dueAt)
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    content: record.content.trim(),
+    dueAt: record.dueAt,
+    createdAt: Number.isFinite(record.createdAt) ? record.createdAt : record.dueAt,
+    updatedAt: Number.isFinite(record.updatedAt) ? record.updatedAt : record.dueAt,
+    completedAt: Number.isFinite(record.completedAt) ? record.completedAt : null,
+  };
+}
+
+export function createMemo({ id, content, dueAt, now = Date.now() }) {
+  const normalizedContent = typeof content === "string" ? content.trim() : "";
+  if (!normalizedContent) throw new Error("请输入备忘内容");
+  if (!isValidTimestamp(dueAt)) throw new Error("请选择有效的到期时间");
+  if (dueAt <= now) {
+    throw new Error("到期时间需要晚于当前时间");
+  }
+  return {
+    id,
+    content: normalizedContent,
+    dueAt,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null,
+  };
+}
+
+export function parseMemos(serialized) {
+  try {
+    const records = JSON.parse(serialized ?? "[]");
+    if (!Array.isArray(records)) return [];
+    return records.map(normalizeMemo).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export function getNextDueMemo(memos, now = Date.now()) {
+  return memos
+    .filter((memo) => memo.completedAt === null && memo.dueAt <= now)
+    .sort((left, right) => left.dueAt - right.dueAt)[0] ?? null;
+}
+
+export function getActiveMemos(memos) {
+  return memos
+    .filter((memo) => memo.completedAt === null)
+    .sort((left, right) => left.dueAt - right.dueAt);
+}
+
+export function updateMemo(memos, id, { content, dueAt }, now = Date.now()) {
+  const updated = createMemo({ id, content, dueAt, now });
+  return memos.map((memo) => memo.id === id
+    ? {
+        ...memo,
+        content: updated.content,
+        dueAt: updated.dueAt,
+        updatedAt: now,
+      }
+    : memo);
+}
+
+export function deleteMemo(memos, id) {
+  return memos.filter((memo) => memo.id !== id);
+}
+
+export function completeMemo(memos, id, now = Date.now()) {
+  return memos.map((memo) => memo.id === id
+    ? { ...memo, completedAt: now, updatedAt: now }
+    : memo);
+}
+
+export function snoozeMemo(memos, id, minutes, now = Date.now()) {
+  const dueAt = now + minutes * 60_000;
+  return memos.map((memo) => memo.id === id
+    ? { ...memo, dueAt, completedAt: null, updatedAt: now }
+    : memo);
 }

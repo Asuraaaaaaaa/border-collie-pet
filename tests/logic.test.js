@@ -160,6 +160,18 @@ test("keeps the bubble and pet inside a work area with a negative origin", () =>
   );
 });
 
+test("keeps the pet under the pointer when dragging an expanded window", () => {
+  assert.equal(typeof logic.windowPositionForPet, "function");
+  assert.deepEqual(
+    logic.windowPositionForPet({ x: 640, y: 420 }, { x: 60, y: 190 }),
+    { x: 580, y: 230 },
+  );
+  assert.deepEqual(
+    logic.windowPositionForPet({ x: 640, y: 420 }),
+    { x: 640, y: 420 },
+  );
+});
+
 test("expands fixed panels to fit Windows text and control metrics", () => {
   assert.equal(typeof logic.resolvePanelSize, "function");
   assert.deepEqual(
@@ -300,6 +312,154 @@ test("counts key presses from the rolling previous minute", () => {
   assert.equal(countRecentKeyPresses([], 100_000), 0);
 });
 
+test("creates a trimmed memo with a future due time", () => {
+  assert.equal(typeof logic.createMemo, "function");
+  assert.deepEqual(
+    logic.createMemo({
+      id: "memo-1",
+      content: "  提交周报  ",
+      dueAt: 70_000,
+      now: 10_000,
+    }),
+    {
+      id: "memo-1",
+      content: "提交周报",
+      dueAt: 70_000,
+      createdAt: 10_000,
+      updatedAt: 10_000,
+      completedAt: null,
+    },
+  );
+  assert.throws(
+    () => logic.createMemo({ id: "memo-2", content: "   ", dueAt: 70_000, now: 10_000 }),
+    /请输入备忘内容/,
+  );
+  assert.throws(
+    () => logic.createMemo({ id: "memo-3", content: "过期", dueAt: 9_999, now: 10_000 }),
+    /到期时间需要晚于当前时间/,
+  );
+  assert.throws(
+    () => logic.createMemo({
+      id: "memo-4",
+      content: "无效日期",
+      dueAt: Number.MAX_VALUE,
+      now: 10_000,
+    }),
+    /请选择有效的到期时间/,
+  );
+});
+
+test("loads only valid persisted memos and tolerates damaged storage", () => {
+  assert.equal(typeof logic.parseMemos, "function");
+  assert.deepEqual(logic.parseMemos("not-json"), []);
+  assert.deepEqual(logic.parseMemos(JSON.stringify([
+    {
+      id: "valid",
+      content: "  取快递 ",
+      dueAt: 30_000,
+      createdAt: 1_000,
+      updatedAt: 2_000,
+      completedAt: null,
+    },
+    { id: "missing-time", content: "无效" },
+    {
+      id: "invalid-date",
+      content: "无法格式化",
+      dueAt: Number.MAX_VALUE,
+      createdAt: 1_000,
+      updatedAt: 1_000,
+      completedAt: null,
+    },
+  ])), [{
+    id: "valid",
+    content: "取快递",
+    dueAt: 30_000,
+    createdAt: 1_000,
+    updatedAt: 2_000,
+    completedAt: null,
+  }]);
+});
+
+test("selects the earliest unfinished memo that is due", () => {
+  assert.equal(typeof logic.getNextDueMemo, "function");
+  const memos = [
+    { id: "later", content: "B", dueAt: 9_000, completedAt: null },
+    { id: "done", content: "C", dueAt: 1_000, completedAt: 5_000 },
+    { id: "first", content: "A", dueAt: 3_000, completedAt: null },
+    { id: "future", content: "D", dueAt: 11_000, completedAt: null },
+  ];
+
+  assert.equal(logic.getNextDueMemo(memos, 10_000)?.id, "first");
+  assert.equal(logic.getNextDueMemo(memos, 2_000), null);
+});
+
+test("completes and snoozes memos without changing unrelated entries", () => {
+  assert.equal(typeof logic.completeMemo, "function");
+  assert.equal(typeof logic.snoozeMemo, "function");
+  const memos = [
+    { id: "first", content: "A", dueAt: 3_000, updatedAt: 1_000, completedAt: null },
+    { id: "second", content: "B", dueAt: 4_000, updatedAt: 1_000, completedAt: null },
+  ];
+
+  const completed = logic.completeMemo(memos, "first", 10_000);
+  assert.equal(completed[0].completedAt, 10_000);
+  assert.equal(completed[0].updatedAt, 10_000);
+  assert.equal(completed[1], memos[1]);
+
+  const snoozed = logic.snoozeMemo(memos, "first", 15, 10_000);
+  assert.equal(snoozed[0].dueAt, 910_000);
+  assert.equal(snoozed[0].updatedAt, 10_000);
+  assert.equal(snoozed[0].completedAt, null);
+  assert.equal(snoozed[1], memos[1]);
+});
+
+test("sorts unfinished memos by due time", () => {
+  assert.equal(typeof logic.getActiveMemos, "function");
+  const memos = [
+    { id: "later", dueAt: 8_000, completedAt: null },
+    { id: "done", dueAt: 1_000, completedAt: 2_000 },
+    { id: "first", dueAt: 3_000, completedAt: null },
+  ];
+
+  assert.deepEqual(
+    logic.getActiveMemos(memos).map((memo) => memo.id),
+    ["first", "later"],
+  );
+});
+
+test("edits and deletes only the selected memo", () => {
+  assert.equal(typeof logic.updateMemo, "function");
+  assert.equal(typeof logic.deleteMemo, "function");
+  const memos = [
+    {
+      id: "first",
+      content: "旧内容",
+      dueAt: 30_000,
+      createdAt: 1_000,
+      updatedAt: 1_000,
+      completedAt: null,
+    },
+    { id: "second", content: "B", dueAt: 40_000, completedAt: null },
+  ];
+
+  const updated = logic.updateMemo(
+    memos,
+    "first",
+    { content: "  新内容  ", dueAt: 50_000 },
+    10_000,
+  );
+  assert.deepEqual(updated[0], {
+    id: "first",
+    content: "新内容",
+    dueAt: 50_000,
+    createdAt: 1_000,
+    updatedAt: 10_000,
+    completedAt: null,
+  });
+  assert.equal(updated[1], memos[1]);
+  assert.deepEqual(logic.deleteMemo(updated, "first"), [memos[1]]);
+});
+
 test("shows a keys-per-minute rate that refreshes while visible", () => {
   const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
   const keyboard = readFileSync(
@@ -388,4 +548,85 @@ test("allows Windows form controls and keyboard rows to shrink inside panels", (
   assert.match(html, /\.actions button[\s\S]*?min-width:\s*0/);
   assert.match(html, /\.kb-row[\s\S]*?min-width:\s*0/);
   assert.match(html, /\.kb-key[\s\S]*?overflow:\s*hidden/);
+});
+
+test("provides memo management and a persistent due reminder", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+
+  for (const id of [
+    "memoItem",
+    "memoCount",
+    "memoPanel",
+    "memoList",
+    "memoForm",
+    "memoContent",
+    "memoDueAt",
+    "memoAlert",
+    "memoAlertContent",
+    "memoComplete",
+    "memoSnooze",
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.match(html, /role="alertdialog"/);
+  assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  assert.match(pet, /localStorage\.getItem\(MEMO_STORAGE_KEY\)/);
+  assert.match(pet, /getNextDueMemo\(memos/);
+  assert.match(pet, /setInterval\(checkDueMemos,\s*1000\)/);
+  assert.match(pet, /visibilitychange/);
+  assert.match(pet, /snoozeMemo\(memos/);
+  assert.match(pet, /completeMemo\(memos/);
+  assert.match(pet, /closest\("\[data-act\]"\)/);
+  assert.match(
+    pet,
+    /reminderChanged\s*&&\s*memoPanel\.style\.display\s*===\s*"block"/,
+  );
+
+  const reminderStart = pet.indexOf("function checkDueMemos()");
+  const reminderEnd = pet.indexOf("memoAdd.addEventListener", reminderStart);
+  const reminderPath = pet.slice(reminderStart, reminderEnd);
+  assert.match(reminderPath, /if \(menuOpen\)[\s\S]*?closeMenu\(\)/);
+
+  const contextMenuStart = pet.indexOf('img.addEventListener("contextmenu"');
+  const contextMenuEnd = pet.indexOf('document.addEventListener("click"', contextMenuStart);
+  const contextMenuPath = pet.slice(contextMenuStart, contextMenuEnd);
+  assert.match(contextMenuPath, /if \(activeMemo\) return/);
+
+  assert.match(pet, /function resumeKeyboardIfAllowed\(\)/);
+  assert.match(pet, /function showKeyboardForPomodoro\(/);
+  assert.match(pet, /windowPositionForPet\(pos, dragWindowOffset\)/);
+  assert.match(pet, /const persistedMemos = getActiveMemos\(nextMemos\)/);
+});
+
+test("aligns the memo label with status menu items", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  assert.match(
+    html,
+    /class="item uncheck" data-act="memo" id="memoItem"/,
+  );
+  const memoItemStyles = html.slice(
+    html.indexOf("#memoItem {"),
+    html.indexOf("#memoCount {"),
+  );
+  assert.match(memoItemStyles, /display:\s*grid/);
+  assert.match(
+    memoItemStyles,
+    /grid-template-columns:\s*max-content minmax\(0,\s*1fr\) auto/,
+  );
+});
+
+test("keeps checked and unchecked menu labels at the same position", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const markerStyles = html.slice(
+    html.indexOf("#ctxMenu .check::before"),
+    html.indexOf("#ctxMenu .has-sub::after"),
+  );
+  assert.match(
+    markerStyles,
+    /#ctxMenu \.check::before,\s*#ctxMenu \.uncheck::before\s*\{/,
+  );
+  assert.match(markerStyles, /display:\s*inline-block/);
+  assert.match(markerStyles, /width:\s*1em/);
+  assert.match(markerStyles, /margin-right:\s*4px/);
 });
