@@ -17,5 +17,8 @@ src-tauri/gen/schemas/
 .vscode/
 .idea/
 
+# Local design previews
+.superpowers/
+
 # Original source art (keep processed assets, not raw 2048px sources)
 png/
