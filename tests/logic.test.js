@@ -160,6 +160,32 @@ test("keeps the bubble and pet inside a work area with a negative origin", () =>
   );
 });
 
+test("adapts a social panel without covering the pet on a short display", () => {
+  const workArea = { x: 0, y: 0, width: 600, height: 480 };
+  const layout = calculateKeyboardLayout({
+    petPosition: { x: 200, y: 100 },
+    petSize: 320,
+    panelSize: { width: 320, height: 420 },
+    minimumPanelSize: { width: 260, height: 240 },
+    workArea,
+  });
+
+  assert.equal(layout.overlay, false);
+  assert.equal(layout.placement, "left");
+  assert.deepEqual(layout.panelSize, { width: 272, height: 420 });
+  assert.deepEqual(layout.petPosition, { x: 280, y: 100 });
+  assert.equal(
+    layout.windowPosition.x + layout.panelOffset.x + layout.panelSize.width
+      <= layout.petPosition.x,
+    true,
+  );
+  assert.equal(
+    layout.windowPosition.y + layout.panelOffset.y + layout.panelSize.height
+      <= workArea.y + workArea.height,
+    true,
+  );
+});
+
 test("keeps the pet under the pointer when dragging an expanded window", () => {
   assert.equal(typeof logic.windowPositionForPet, "function");
   assert.deepEqual(
@@ -212,6 +238,25 @@ test("keeps the pet stationary when an adaptive menu is clamped at an edge", () 
       y: layout.windowPosition.y + layout.petOffset.y,
     },
     { x: 640, y: 400 },
+  );
+});
+
+test("places a tall context menu beside the pet on a short display", () => {
+  const layout = logic.calculateMenuLayout({
+    petPosition: { x: 200, y: 100 },
+    petSize: 320,
+    menuSize: { width: 260, height: 420 },
+    minimumMenuSize: { width: 220, height: 180 },
+    workArea: { x: 0, y: 0, width: 600, height: 480 },
+  });
+
+  assert.equal(layout.placement, "left");
+  assert.deepEqual(layout.menuSize, { width: 260, height: 420 });
+  assert.deepEqual(layout.petPosition, { x: 268, y: 100 });
+  assert.equal(
+    layout.windowPosition.x + layout.menuOffset.x + layout.menuSize.width
+      <= layout.petPosition.x,
+    true,
   );
 });
 

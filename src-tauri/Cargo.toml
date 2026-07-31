@@ -1,6 +1,6 @@
 [package]
 name = "line-puppy-pet"
-version = "0.3.7"
+version = "0.3.8"
 description = "A line-puppy desktop pet for macOS and Windows"
 edition = "2021"
 

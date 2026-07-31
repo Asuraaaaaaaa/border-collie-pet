@@ -136,11 +136,102 @@ export function defaultPetPosition(workArea, petSize, margins = {}) {
   );
 }
 
+const PANEL_PLACEMENTS = ["above", "below", "right", "left"];
+
+function adaptivePanelCandidate({
+  placement,
+  petPosition,
+  petSize,
+  petInsets,
+  panelSize,
+  minimumPanelSize,
+  workArea,
+  gap,
+}) {
+  const leftEdge = workArea.x;
+  const rightEdge = workArea.x + workArea.width;
+  const topEdge = workArea.y;
+  const bottomEdge = workArea.y + workArea.height;
+  const insets = {
+    top: petInsets.top ?? 0,
+    right: petInsets.right ?? 0,
+    bottom: petInsets.bottom ?? 0,
+    left: petInsets.left ?? 0,
+  };
+  const maximumPanelSize = {
+    width: placement === "right"
+      ? workArea.width - petSize + insets.right - gap
+      : placement === "left"
+        ? workArea.width - petSize + insets.left - gap
+        : workArea.width,
+    height: placement === "above"
+      ? workArea.height - petSize + insets.top - gap
+      : placement === "below"
+        ? workArea.height - petSize + insets.bottom - gap
+        : workArea.height,
+  };
+  const renderedPanelSize = {
+    width: Math.min(panelSize.width, maximumPanelSize.width),
+    height: Math.min(panelSize.height, maximumPanelSize.height),
+  };
+  if (
+    renderedPanelSize.width < minimumPanelSize.width
+    || renderedPanelSize.height < minimumPanelSize.height
+  ) {
+    return null;
+  }
+
+  let minimumPetX = leftEdge;
+  let maximumPetX = rightEdge - petSize;
+  let minimumPetY = topEdge;
+  let maximumPetY = bottomEdge - petSize;
+  if (placement === "above") {
+    minimumPetY = topEdge + renderedPanelSize.height + gap - insets.top;
+  } else if (placement === "below") {
+    maximumPetY = bottomEdge - petSize + insets.bottom
+      - gap - renderedPanelSize.height;
+  } else if (placement === "right") {
+    maximumPetX = rightEdge - petSize + insets.right
+      - gap - renderedPanelSize.width;
+  } else {
+    minimumPetX = leftEdge + renderedPanelSize.width + gap - insets.left;
+  }
+  if (minimumPetX > maximumPetX || minimumPetY > maximumPetY) return null;
+
+  const fittedPetPosition = {
+    x: clamp(petPosition.x, minimumPetX, maximumPetX),
+    y: clamp(petPosition.y, minimumPetY, maximumPetY),
+  };
+  const displacement = Math.abs(fittedPetPosition.x - petPosition.x)
+    + Math.abs(fittedPetPosition.y - petPosition.y);
+  return {
+    placement,
+    panelSize: renderedPanelSize,
+    petPosition: fittedPetPosition,
+    area: renderedPanelSize.width * renderedPanelSize.height,
+    displacement,
+  };
+}
+
+function findAdaptivePanelLayout(options) {
+  const candidates = PANEL_PLACEMENTS
+    .map((placement) => adaptivePanelCandidate({ ...options, placement }))
+    .filter(Boolean);
+  candidates.sort((left, right) => (
+    right.area - left.area
+    || left.displacement - right.displacement
+    || PANEL_PLACEMENTS.indexOf(left.placement)
+      - PANEL_PLACEMENTS.indexOf(right.placement)
+  ));
+  return candidates[0] ?? null;
+}
+
 export function calculateKeyboardLayout({
   petPosition,
   petSize,
   petInsets = {},
   panelSize,
+  minimumPanelSize = panelSize,
   workArea,
   gap = 8,
 }) {
@@ -154,10 +245,6 @@ export function calculateKeyboardLayout({
     top: petPosition.y + (petInsets.top ?? 0),
     bottom: petPosition.y + petSize - (petInsets.bottom ?? 0),
   };
-  const visiblePetCenter = {
-    x: (visiblePet.left + visiblePet.right) / 2,
-    y: (visiblePet.top + visiblePet.bottom) / 2,
-  };
   const spaces = {
     above: visiblePet.top - topEdge,
     below: bottomEdge - visiblePet.bottom,
@@ -170,59 +257,87 @@ export function calculateKeyboardLayout({
     right: panelSize.width + gap,
     left: panelSize.width + gap,
   };
-  const placementOrder = ["above", "below", "right", "left"];
-  let placement = placementOrder.find(
+  let placement = PANEL_PLACEMENTS.find(
     (candidate) => spaces[candidate] >= requiredSpace[candidate],
   );
+  let renderedPanelSize = { ...panelSize };
+  let fittedPetPosition = { ...petPosition };
+  let overlay = false;
   if (!placement) {
-    placement = placementOrder.reduce(
-      (best, candidate) => spaces[candidate] > spaces[best] ? candidate : best,
-      placementOrder[0],
-    );
+    const adaptiveLayout = findAdaptivePanelLayout({
+      petPosition,
+      petSize,
+      petInsets,
+      panelSize,
+      minimumPanelSize,
+      workArea,
+      gap,
+    });
+    if (adaptiveLayout) {
+      placement = adaptiveLayout.placement;
+      renderedPanelSize = adaptiveLayout.panelSize;
+      fittedPetPosition = adaptiveLayout.petPosition;
+    } else {
+      placement = PANEL_PLACEMENTS.reduce(
+        (best, candidate) => spaces[candidate] > spaces[best] ? candidate : best,
+        PANEL_PLACEMENTS[0],
+      );
+      overlay = true;
+    }
   }
 
-  const centeredPanelX = visiblePetCenter.x - panelSize.width / 2;
-  const centeredPanelY = visiblePetCenter.y - panelSize.height / 2;
+  const fittedVisiblePet = {
+    left: fittedPetPosition.x + (petInsets.left ?? 0),
+    right: fittedPetPosition.x + petSize - (petInsets.right ?? 0),
+    top: fittedPetPosition.y + (petInsets.top ?? 0),
+    bottom: fittedPetPosition.y + petSize - (petInsets.bottom ?? 0),
+  };
+  const fittedVisiblePetCenter = {
+    x: (fittedVisiblePet.left + fittedVisiblePet.right) / 2,
+    y: (fittedVisiblePet.top + fittedVisiblePet.bottom) / 2,
+  };
+  const centeredPanelX = fittedVisiblePetCenter.x - renderedPanelSize.width / 2;
+  const centeredPanelY = fittedVisiblePetCenter.y - renderedPanelSize.height / 2;
   const panelPosition = {
     x: placement === "right"
-      ? visiblePet.right + gap
+      ? fittedVisiblePet.right + gap
       : placement === "left"
-        ? visiblePet.left - panelSize.width - gap
+        ? fittedVisiblePet.left - renderedPanelSize.width - gap
         : centeredPanelX,
     y: placement === "below"
-      ? visiblePet.bottom + gap
+      ? fittedVisiblePet.bottom + gap
       : placement === "above"
-        ? visiblePet.top - panelSize.height - gap
+        ? fittedVisiblePet.top - renderedPanelSize.height - gap
         : centeredPanelY,
   };
   panelPosition.x = clamp(
     panelPosition.x,
     leftEdge,
-    rightEdge - panelSize.width,
+    rightEdge - renderedPanelSize.width,
   );
   panelPosition.y = clamp(
     panelPosition.y,
     topEdge,
-    bottomEdge - panelSize.height,
+    bottomEdge - renderedPanelSize.height,
   );
 
   const windowPosition = {
-    x: Math.min(petPosition.x, panelPosition.x),
-    y: Math.min(petPosition.y, panelPosition.y),
+    x: Math.min(fittedPetPosition.x, panelPosition.x),
+    y: Math.min(fittedPetPosition.y, panelPosition.y),
   };
   const windowSize = {
     width: Math.max(
-      petPosition.x + petSize,
-      panelPosition.x + panelSize.width,
+      fittedPetPosition.x + petSize,
+      panelPosition.x + renderedPanelSize.width,
     ) - windowPosition.x,
     height: Math.max(
-      petPosition.y + petSize,
-      panelPosition.y + panelSize.height,
+      fittedPetPosition.y + petSize,
+      panelPosition.y + renderedPanelSize.height,
     ) - windowPosition.y,
   };
   const petOffset = {
-    x: petPosition.x - windowPosition.x,
-    y: petPosition.y - windowPosition.y,
+    x: fittedPetPosition.x - windowPosition.x,
+    y: fittedPetPosition.y - windowPosition.y,
   };
   const panelOffset = {
     x: panelPosition.x - windowPosition.x,
@@ -230,14 +345,14 @@ export function calculateKeyboardLayout({
   };
   const pointerOffset = placement === "above" || placement === "below"
     ? clamp(
-        visiblePetCenter.x - panelPosition.x,
+        fittedVisiblePetCenter.x - panelPosition.x,
         18,
-        panelSize.width - 18,
+        renderedPanelSize.width - 18,
       )
     : clamp(
-        visiblePetCenter.y - panelPosition.y,
+        fittedVisiblePetCenter.y - panelPosition.y,
         18,
-        panelSize.height - 18,
+        renderedPanelSize.height - 18,
       );
 
   return {
@@ -247,7 +362,9 @@ export function calculateKeyboardLayout({
     panelOffset,
     placement,
     pointerOffset,
-    overlay: spaces[placement] < requiredSpace[placement],
+    overlay,
+    panelSize: renderedPanelSize,
+    petPosition: fittedPetPosition,
   };
 }
 
@@ -256,9 +373,31 @@ export function calculateMenuLayout({
   petSize,
   petInsets = {},
   menuSize,
+  minimumMenuSize = menuSize,
   workArea,
   gap = 8,
 }) {
+  const adaptiveLayout = calculateKeyboardLayout({
+    petPosition,
+    petSize,
+    petInsets,
+    panelSize: menuSize,
+    minimumPanelSize: minimumMenuSize,
+    workArea,
+    gap,
+  });
+  if (!adaptiveLayout.overlay) {
+    return {
+      placement: adaptiveLayout.placement,
+      windowPosition: adaptiveLayout.windowPosition,
+      windowSize: adaptiveLayout.windowSize,
+      petOffset: adaptiveLayout.petOffset,
+      menuOffset: adaptiveLayout.panelOffset,
+      menuSize: adaptiveLayout.panelSize,
+      petPosition: adaptiveLayout.petPosition,
+    };
+  }
+
   const leftEdge = workArea.x;
   const rightEdge = workArea.x + workArea.width;
   const topEdge = workArea.y;
@@ -321,6 +460,7 @@ export function calculateMenuLayout({
       y: menuPosition.y - windowPosition.y,
     },
     menuSize: renderedMenuSize,
+    petPosition: { ...petPosition },
   };
 }
 

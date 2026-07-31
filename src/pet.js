@@ -30,6 +30,7 @@ import {
   windowPositionForPet,
 } from "./logic.js";
 import {
+  SOCIAL_PANEL_MIN_SIZE,
   SOCIAL_PANEL_SIZE,
   configureSocialLayout,
   configureSocialNotifications,
@@ -54,6 +55,7 @@ const FOCUS_POSE_VISUAL_INSETS = {
   idle: { top: 28, right: 12, bottom: 10, left: 25 },
 };
 const MENU_WIDTH = 260;
+const MENU_MIN_SIZE = { width: 220, height: 180 };
 const MEMO_STORAGE_KEY = "linePuppyMemos";
 const MEMO_ALERT_MIN_SIZE = { width: 280, height: 144 };
 const MEMO_ALERT_MAX_SIZE = { width: 360, height: 280 };
@@ -293,6 +295,7 @@ async function applyWindowLayout() {
       panelSize,
       workArea: bounds,
     }));
+    pos = layout.petPosition;
     img.style.left = `${layout.petOffset.x}px`;
     img.style.top = `${layout.petOffset.y}px`;
     bubble.style.left = `${layout.petOffset.x + size / 2}px`;
@@ -346,26 +349,35 @@ async function applyWindowLayout() {
         height: Math.min(socialPanelSize.height, bounds.height),
       }
     : keyboardPanelSize;
+  const minimumPanelSize = socialVisible
+    ? {
+        width: Math.min(SOCIAL_PANEL_MIN_SIZE.width, bounds.width),
+        height: Math.min(SOCIAL_PANEL_MIN_SIZE.height, bounds.height),
+      }
+    : activePanelSize;
   const layout = addPetWindowMargin(calculateKeyboardLayout({
     petPosition: pos,
     petSize: size,
     petInsets,
     panelSize: activePanelSize,
+    minimumPanelSize,
     workArea: bounds,
   }));
+  pos = layout.petPosition;
+  const renderedPanelSize = layout.panelSize;
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
   bubble.style.left = `${layout.petOffset.x + size / 2}px`;
   bubble.style.top = `${layout.petOffset.y + petInsets.top - 4}px`;
-  timerEl.style.left = `${layout.panelOffset.x + activePanelSize.width / 2}px`;
+  timerEl.style.left = `${layout.panelOffset.x + renderedPanelSize.width / 2}px`;
   timerEl.style.top = `${layout.panelOffset.y + 3}px`;
   timerEl.style.right = "auto";
   timerEl.style.transform = "translateX(-50%)";
   const panelRect = {
     x: layout.panelOffset.x,
     y: layout.panelOffset.y,
-    width: activePanelSize.width,
-    height: activePanelSize.height,
+    width: renderedPanelSize.width,
+    height: renderedPanelSize.height,
     placement: layout.placement,
     pointerOffset: layout.pointerOffset,
   };
@@ -1007,9 +1019,14 @@ async function layoutContextMenu() {
     petSize: size,
     petInsets: scaledPetInsets(state),
     menuSize,
+    minimumMenuSize: {
+      width: Math.min(MENU_MIN_SIZE.width, bounds.width),
+      height: Math.min(MENU_MIN_SIZE.height, bounds.height),
+    },
     workArea: bounds,
   }));
 
+  pos = layout.petPosition;
   img.style.left = `${layout.petOffset.x}px`;
   img.style.top = `${layout.petOffset.y}px`;
   ctxMenu.style.left = `${layout.menuOffset.x}px`;

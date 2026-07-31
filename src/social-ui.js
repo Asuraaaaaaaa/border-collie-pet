@@ -8,6 +8,7 @@ import {
 import { createDefaultSocialService } from "./social-service.js";
 
 export const SOCIAL_PANEL_SIZE = { width: 320, height: 420 };
+export const SOCIAL_PANEL_MIN_SIZE = { width: 260, height: 240 };
 
 const byId = (id) => document.getElementById(id);
 const panel = byId("socialPanel");
