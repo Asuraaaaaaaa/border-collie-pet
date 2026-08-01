@@ -158,6 +158,7 @@
     /* inline panels shown inside the scrollable context menu */
     .pomo-panel,
     .memo-panel,
+    #characterPanel,
     #interactPanel {
       display: none;
       width: 100%;
@@ -166,6 +167,55 @@
       box-sizing: border-box;
       overflow-x: hidden;
     }
+    #characterItem {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .character-current {
+      min-width: 0;
+      margin-left: auto;
+      color: #737373;
+      font-size: 11px;
+    }
+    .character-panel {
+      padding: 3px 10px 7px;
+    }
+    .character-option {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) 18px;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+      height: 40px;
+      padding: 3px 6px;
+      border: 0;
+      border-radius: 5px;
+      box-sizing: border-box;
+      background: transparent;
+      color: #222;
+      font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      text-align: left;
+      cursor: pointer;
+    }
+    .character-option:hover { background: rgba(0, 122, 255, 0.08); }
+    .character-option.selected { background: rgba(52, 199, 89, 0.09); }
+    .character-option img {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .character-check {
+      color: #248a3d;
+      font-size: 14px;
+      text-align: center;
+      visibility: hidden;
+    }
+    .character-option.selected .character-check { visibility: visible; }
     .pomo-panel { padding: 6px 14px; }
     .pomo-panel .preset-row {
       display: flex;
@@ -912,7 +962,7 @@
   </style>
 </head>
 <body>
-  <img id="pet" draggable="false" src="assets/idle_0.png" alt="puppy" />
+  <img id="pet" draggable="false" src="assets/characters/border-collie/idle_0.png" alt="边牧桌宠" />
   <div id="bubble"></div>
   <div id="timer"></div>
   <div id="kbPanel">
@@ -1091,6 +1141,22 @@
     <div class="item" data-act="social" id="socialItem">
       <span>好友与消息</span><span id="socialUnread" class="social-badge" hidden>0</span>
     </div>
+    <div class="item" data-act="character" id="characterItem">
+      <span>宠物形象</span>
+      <span class="character-current"><span id="characterName">边牧</span> ▶</span>
+    </div>
+    <div id="characterPanel" class="character-panel" role="radiogroup" aria-label="宠物形象">
+      <button class="character-option selected" type="button" role="radio" aria-checked="true" data-character-id="border-collie">
+        <img src="assets/characters/border-collie/idle_0.png" alt="">
+        <span>边牧</span>
+        <span class="character-check" aria-hidden="true">✓</span>
+      </button>
+      <button class="character-option" type="button" role="radio" aria-checked="false" data-character-id="person">
+        <img src="assets/characters/person/idle_0.png" alt="">
+        <span>人物</span>
+        <span class="character-check" aria-hidden="true">✓</span>
+      </button>
+    </div>
     <div class="sep"></div>
     <div class="item" data-act="interact" id="interactItem">互动 ▶</div>
     <div id="interactPanel">
@@ -1099,9 +1165,9 @@
       <div class="item" data-act="jump">　蹦一下</div>
       <div class="item" data-act="happy">　摸摸头</div>
       <div class="item" data-act="tilt">　歪头杀</div>
-      <div class="item" data-act="wag">　摇尾巴</div>
-      <div class="item" data-act="sniff">　嗅一嗅</div>
-      <div class="item" data-act="scratch">　挠痒痒</div>
+      <div class="item" data-act="wag" id="wagAction">　摇尾巴</div>
+      <div class="item" data-act="sniff" id="sniffAction">　嗅一嗅</div>
+      <div class="item" data-act="scratch" id="scratchAction">　挠痒痒</div>
       <div class="item" data-act="sit">　坐下</div>
       <div class="item" data-act="sleep">　去睡觉</div>
     </div>

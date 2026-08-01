@@ -40,6 +40,14 @@ import {
   setSocialPanelRect,
   showSocial,
 } from "./social-ui.js";
+import {
+  CHARACTER_DEFINITIONS,
+  CHARACTER_STORAGE_KEY,
+  DEFAULT_CHARACTER_ID,
+  frameNamesForAction,
+  getCharacterDefinition,
+  resolveCharacterId,
+} from "./characters.js";
 
 const T = window.__TAURI__;
 const win = T.window.getCurrentWindow();
@@ -49,11 +57,6 @@ const MIN_SIZE = 100;
 const MAX_SIZE = 320;
 const DEFAULT_SIZE = 160;
 const PET_WINDOW_MARGIN = 2;
-const FOCUS_POSE_VISUAL_INSETS = {
-  lying: { top: 60, right: 8, bottom: 20, left: 8 },
-  sit: { top: 22, right: 13, bottom: 9, left: 34 },
-  idle: { top: 28, right: 12, bottom: 10, left: 25 },
-};
 const MENU_WIDTH = 260;
 const MENU_MIN_SIZE = { width: 220, height: 180 };
 const MEMO_STORAGE_KEY = "linePuppyMemos";
@@ -69,44 +72,72 @@ const W = () => size;
 const TICK_MS = 33;
 
 const PET_ASSETS = import.meta.glob([
-  "./assets/idle_*.png",
-  "./assets/walk_right_*.png",
-  "./assets/run_*.png",
-  "./assets/sit_*.png",
-  "./assets/lying_*.png",
-  "./assets/sleep_*.png",
-  "./assets/jump_*.png",
-  "./assets/wag_*.png",
-  "./assets/tilt_*.png",
-  "./assets/sniff_*.png",
-  "./assets/scratch_*.png",
+  "./assets/characters/*/idle_*.png",
+  "./assets/characters/*/walk_right_*.png",
+  "./assets/characters/*/run_*.png",
+  "./assets/characters/*/sit_*.png",
+  "./assets/characters/*/lying_*.png",
+  "./assets/characters/*/sleep_*.png",
+  "./assets/characters/*/jump_*.png",
+  "./assets/characters/*/wag_*.png",
+  "./assets/characters/*/tilt_*.png",
+  "./assets/characters/*/sniff_*.png",
+  "./assets/characters/*/scratch_*.png",
 ], {
   eager: true,
   query: "?url",
   import: "default",
 });
 
-function petAsset(name) {
-  const url = PET_ASSETS[`./assets/${name}`];
-  if (!url) throw new Error(`Missing pet asset: ${name}`);
+function petAsset(characterId, name) {
+  const character = getCharacterDefinition(characterId);
+  const path = `./assets/characters/${character.assetDirectory}/${name}`;
+  const url = PET_ASSETS[path];
+  if (!url) throw new Error(`Missing pet asset: ${path}`);
   return url;
 }
 
-const ACTIONS = {
-  idle:   { frames: [0, 1, 2, 3].map(i => petAsset(`idle_${i}.png`)), fps: 1.5 },
-  walk:   { frames: [0, 1, 2, 3].map(i => petAsset(`walk_right_${i}.png`)), fps: 8 },
-  run:    { frames: [0, 1, 2, 3].map(i => petAsset(`run_${i}.png`)), fps: 10 },
-  sit:    { frames: [petAsset("sit_0.png"), petAsset("sit_1.png")], fps: 1.5 },
-  lying:  { frames: [petAsset("lying_0.png")], fps: 1 },
-  sleep:  { frames: [petAsset("sleep_0.png")], fps: 1 },
-  jump:   { frames: [0, 1, 2].map(i => petAsset(`jump_${i}.png`)), fps: 6 },
-  wag:    { frames: [0, 1, 2, 3].map(i => petAsset(`wag_${i}.png`)), fps: 4 },
-  tilt:   { frames: [petAsset("tilt_0.png"), petAsset("tilt_1.png")], fps: 5 },
-  sniff:  { frames: [petAsset("sniff_0.png"), petAsset("sniff_1.png")], fps: 2 },
-  scratch:{ frames: [petAsset("scratch_0.png"), petAsset("scratch_1.png")], fps: 4 },
-  happy:  { frames: [petAsset("tilt_0.png"), petAsset("tilt_1.png")], fps: 5 },
-  drag:   { frames: [petAsset("tilt_0.png")], fps: 1 },
+const ACTION_FPS = {
+  idle: 1.5,
+  walk: 8,
+  run: 10,
+  sit: 1.5,
+  lying: 1,
+  sleep: 1,
+  jump: 6,
+  wag: 4,
+  tilt: 5,
+  sniff: 2,
+  scratch: 4,
 };
+
+function buildCharacterActions(characterId) {
+  const actions = Object.fromEntries(
+    Object.entries(ACTION_FPS).map(([action, fps]) => [
+      action,
+      {
+        frames: frameNamesForAction(action).map(name => petAsset(characterId, name)),
+        fps,
+      },
+    ]),
+  );
+  actions.happy = { ...actions.tilt };
+  actions.drag = { frames: [actions.tilt.frames[0]], fps: 1 };
+  return actions;
+}
+
+const CHARACTER_ACTIONS = Object.fromEntries(
+  Object.keys(CHARACTER_DEFINITIONS).map(characterId => [
+    characterId,
+    buildCharacterActions(characterId),
+  ]),
+);
+const savedCharacterId = localStorage.getItem(CHARACTER_STORAGE_KEY);
+let currentCharacterId = resolveCharacterId(savedCharacterId);
+if (savedCharacterId !== currentCharacterId) {
+  localStorage.setItem(CHARACTER_STORAGE_KEY, currentCharacterId);
+}
+let ACTIONS = CHARACTER_ACTIONS[currentCharacterId];
 
 // Actions that don't move the pet (play a one-shot animation in place)
 const INPLACE_ACTIONS = new Set(["sit", "jump", "wag", "tilt", "sniff", "scratch", "happy", "drag", "lying"]);
@@ -114,8 +145,10 @@ const INPLACE_ACTIONS = new Set(["sit", "jump", "wag", "tilt", "sniff", "scratch
 const SLEEP_AFTER = 2400;
 const SPEEDS = { walk: 3, run: 7 };
 
-for (const a of Object.values(ACTIONS)) {
-  for (const src of a.frames) { new Image().src = src; }
+for (const characterActions of Object.values(CHARACTER_ACTIONS)) {
+  for (const action of Object.values(characterActions)) {
+    for (const src of action.frames) { new Image().src = src; }
+  }
 }
 
 const img = document.getElementById("pet");
@@ -150,6 +183,11 @@ const memoAlertQueue = document.getElementById("memoAlertQueue");
 const memoCompleteButton = document.getElementById("memoComplete");
 const memoSnoozeButton = document.getElementById("memoSnooze");
 const memoSnoozeOptions = document.getElementById("memoSnoozeOptions");
+const characterPanel = document.getElementById("characterPanel");
+const characterName = document.getElementById("characterName");
+const wagAction = document.getElementById("wagAction");
+const sniffAction = document.getElementById("sniffAction");
+const scratchAction = document.getElementById("scratchAction");
 
 let state = "idle";
 let frameIdx = 0;
@@ -238,8 +276,8 @@ function addPetWindowMargin(layout) {
 
 function scaledPetInsets(pose) {
   const insetScale = size / DEFAULT_SIZE;
-  const baseInsets = FOCUS_POSE_VISUAL_INSETS[pose]
-    ?? FOCUS_POSE_VISUAL_INSETS.idle;
+  const visualInsets = getCharacterDefinition(currentCharacterId).visualInsets;
+  const baseInsets = visualInsets[pose] ?? visualInsets.idle;
   return Object.fromEntries(
     Object.entries(baseInsets).map(([edge, value]) => [
       edge,
@@ -412,16 +450,48 @@ function showKeyboardForPomodoro(options) {
 }
 
 let animTimer = null;
-function startAnim() {
+function startAnim(preserveFrame = false) {
   clearInterval(animTimer);
   const a = ACTIONS[state];
-  frameIdx = 0;
-  img.src = a.frames[0];
+  frameIdx = preserveFrame ? frameIdx % a.frames.length : 0;
+  img.src = a.frames[frameIdx];
   animTimer = setInterval(() => {
     frameIdx = (frameIdx + 1) % a.frames.length;
     img.src = a.frames[frameIdx];
   }, 1000 / a.fps);
 }
+
+function updateCharacterControls() {
+  const character = getCharacterDefinition(currentCharacterId);
+  img.alt = character.alt;
+  characterName.textContent = character.name;
+  wagAction.textContent = character.interactionLabels.wag;
+  sniffAction.textContent = character.interactionLabels.sniff;
+  scratchAction.textContent = character.interactionLabels.scratch;
+
+  document.querySelectorAll("[data-character-id]").forEach(option => {
+    const selected = option.dataset.characterId === currentCharacterId;
+    option.classList.toggle("selected", selected);
+    option.setAttribute("aria-checked", String(selected));
+  });
+}
+
+async function switchCharacter(characterId) {
+  const resolvedId = resolveCharacterId(characterId);
+  if (resolvedId === currentCharacterId) return;
+  currentCharacterId = resolvedId;
+  ACTIONS = CHARACTER_ACTIONS[currentCharacterId];
+  localStorage.setItem(CHARACTER_STORAGE_KEY, currentCharacterId);
+  updateCharacterControls();
+  startAnim(true);
+  await layoutContextMenu();
+}
+
+img.addEventListener("error", () => {
+  if (currentCharacterId === DEFAULT_CHARACTER_ID) return;
+  const fallbackAction = CHARACTER_ACTIONS[DEFAULT_CHARACTER_ID][state];
+  img.src = fallbackAction.frames[frameIdx % fallbackAction.frames.length];
+});
 
 function rand(min, max) { return Math.floor(Math.random() * (max - min)) + min; }
 
@@ -1056,6 +1126,7 @@ async function closeMenu() {
   ctxMenu.style.display = "none";
   pomoPanel.style.display = "none";
   memoPanel.style.display = "none";
+  characterPanel.style.display = "none";
   closeMemoForm();
   document.getElementById("interactPanel").style.display = "none";
   menuOpen = false;
@@ -1088,11 +1159,19 @@ document.addEventListener("contextmenu", (e) => {
 
 ctxMenu.addEventListener("click", async (e) => {
   e.stopPropagation();
+  const characterTarget = e.target.closest("[data-character-id]");
+  if (characterTarget && ctxMenu.contains(characterTarget)) {
+    await switchCharacter(characterTarget.dataset.characterId);
+    return;
+  }
   const actionTarget = e.target.closest("[data-act]");
   if (!actionTarget || !ctxMenu.contains(actionTarget)) return;
   const act = actionTarget.dataset.act;
   // actions that should NOT close the menu (they open sub-panels)
-  const keepOpen = act === "pomodoro" || act === "memo" || act === "interact";
+  const keepOpen = act === "pomodoro"
+    || act === "memo"
+    || act === "character"
+    || act === "interact";
   if (!keepOpen) await closeMenu();
   switch (act) {
     case "pomodoro":
@@ -1103,6 +1182,7 @@ ctxMenu.addEventListener("click", async (e) => {
         // toggle inline panel; keep menu open so user can interact with it
         const isOpen = pomoPanel.style.display === "block";
         memoPanel.style.display = "none";
+        characterPanel.style.display = "none";
         closeMemoForm();
         document.getElementById("interactPanel").style.display = "none";
         pomoPanel.style.display = isOpen ? "none" : "block";
@@ -1123,10 +1203,21 @@ ctxMenu.addEventListener("click", async (e) => {
     case "memo": {
       const isMemoOpen = memoPanel.style.display === "block";
       pomoPanel.style.display = "none";
+      characterPanel.style.display = "none";
       document.getElementById("interactPanel").style.display = "none";
       closeMemoForm();
       memoPanel.style.display = isMemoOpen ? "none" : "block";
       if (!isMemoOpen) renderMemoList();
+      await layoutContextMenu();
+      break;
+    }
+    case "character": {
+      const isCharacterOpen = characterPanel.style.display === "block";
+      pomoPanel.style.display = "none";
+      memoPanel.style.display = "none";
+      closeMemoForm();
+      document.getElementById("interactPanel").style.display = "none";
+      characterPanel.style.display = isCharacterOpen ? "none" : "block";
       await layoutContextMenu();
       break;
     }
@@ -1138,6 +1229,7 @@ ctxMenu.addEventListener("click", async (e) => {
       const panel = document.getElementById("interactPanel");
       pomoPanel.style.display = "none";
       memoPanel.style.display = "none";
+      characterPanel.style.display = "none";
       closeMemoForm();
       panel.style.display = panel.style.display === "none" ? "block" : "none";
       await layoutContextMenu();
@@ -1273,6 +1365,7 @@ async function init() {
   }
   await refreshMonitorBounds(true);
   pos = defaultPetPosition(bounds, W());
+  updateCharacterControls();
   await applySize();
   renderMemoCount();
   checkDueMemos();
