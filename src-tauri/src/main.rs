@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 pub mod keyboard;
+pub mod pocket;
 
 use tauri::{
     Manager,
@@ -62,7 +63,10 @@ fn main() {
             }
         })
         .manage(keyboard::KeyboardListenerState::default())
-        .invoke_handler(tauri::generate_handler![keyboard::start_keyboard_listener])
+        .invoke_handler(tauri::generate_handler![
+            keyboard::start_keyboard_listener,
+            pocket::open_pocket_target,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

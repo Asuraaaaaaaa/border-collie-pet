@@ -48,6 +48,17 @@ import {
   getCharacterDefinition,
   resolveCharacterId,
 } from "./characters.js";
+import {
+  DEFAULT_POCKET_RETENTION_DAYS,
+  addPocketEntries,
+  inferPocketKind,
+  normalizePocketRetentionDays,
+  parsePocketItems,
+  pocketItemLabel,
+  purgeExpiredPocketItems,
+  removePocketItem,
+  togglePocketPinned,
+} from "./pocket.js";
 
 const T = window.__TAURI__;
 const win = T.window.getCurrentWindow();
@@ -60,6 +71,8 @@ const PET_WINDOW_MARGIN = 2;
 const MENU_WIDTH = 260;
 const MENU_MIN_SIZE = { width: 220, height: 180 };
 const MEMO_STORAGE_KEY = "linePuppyMemos";
+const POCKET_STORAGE_KEY = "linePuppyPocketItems";
+const POCKET_RETENTION_KEY = "linePuppyPocketRetentionDays";
 const MEMO_ALERT_MIN_SIZE = { width: 280, height: 144 };
 const MEMO_ALERT_MAX_SIZE = { width: 360, height: 280 };
 let size = parseInt(localStorage.getItem("petSize")) || DEFAULT_SIZE;
@@ -183,6 +196,16 @@ const memoAlertQueue = document.getElementById("memoAlertQueue");
 const memoCompleteButton = document.getElementById("memoComplete");
 const memoSnoozeButton = document.getElementById("memoSnooze");
 const memoSnoozeOptions = document.getElementById("memoSnoozeOptions");
+const pocketItem = document.getElementById("pocketItem");
+const pocketCount = document.getElementById("pocketCount");
+const pocketPanel = document.getElementById("pocketPanel");
+const pocketList = document.getElementById("pocketList");
+const pocketAdd = document.getElementById("pocketAdd");
+const pocketRetention = document.getElementById("pocketRetention");
+const pocketForm = document.getElementById("pocketForm");
+const pocketInput = document.getElementById("pocketInput");
+const pocketError = document.getElementById("pocketError");
+const pocketCancel = document.getElementById("pocketCancel");
 const characterPanel = document.getElementById("characterPanel");
 const characterName = document.getElementById("characterName");
 const wagAction = document.getElementById("wagAction");
@@ -202,6 +225,13 @@ let memos = parseMemos(localStorage.getItem(MEMO_STORAGE_KEY));
 let activeMemo = null;
 let activeMemoSignature = "";
 let editingMemoId = null;
+let pocketRetentionDays = normalizePocketRetentionDays(
+  localStorage.getItem(POCKET_RETENTION_KEY) ?? DEFAULT_POCKET_RETENTION_DAYS,
+);
+let pocketItems = purgeExpiredPocketItems(
+  parsePocketItems(localStorage.getItem(POCKET_STORAGE_KEY)),
+  pocketRetentionDays,
+);
 const reportedWindowErrors = new Set();
 
 function reportWindowErrorOnce(operation, error) {
@@ -1016,6 +1046,256 @@ memoSnoozeOptions.addEventListener("click", (event) => {
   checkDueMemos();
 });
 
+// ---------- pet pocket ----------
+function replacePocketItems(nextItems) {
+  try {
+    const persistedItems = purgeExpiredPocketItems(
+      nextItems,
+      pocketRetentionDays,
+    );
+    localStorage.setItem(POCKET_STORAGE_KEY, JSON.stringify(persistedItems));
+    pocketItems = persistedItems;
+    renderPocketCount();
+    if (pocketPanel.style.display === "block") renderPocketList();
+    return true;
+  } catch (error) {
+    console.error("[pocket] failed to save:", error);
+    return false;
+  }
+}
+
+function cleanExpiredPocketItems() {
+  const nextItems = purgeExpiredPocketItems(
+    pocketItems,
+    pocketRetentionDays,
+  );
+  if (nextItems.length !== pocketItems.length) replacePocketItems(nextItems);
+}
+
+function renderPocketCount() {
+  pocketCount.textContent = String(pocketItems.length);
+  pocketCount.hidden = pocketItems.length === 0;
+  pocketItem.title = pocketItems.length
+    ? `${pocketItems.length} 条口袋内容`
+    : "宠物口袋";
+}
+
+function createPocketAction(symbol, title, action, id, className = "") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `pocket-icon-btn ${className}`.trim();
+  button.textContent = symbol;
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.dataset.pocketAction = action;
+  button.dataset.pocketId = id;
+  return button;
+}
+
+function renderPocketList() {
+  pocketList.replaceChildren();
+  if (!pocketItems.length) {
+    const empty = document.createElement("div");
+    empty.className = "pocket-empty";
+    empty.textContent = "口袋还是空的";
+    pocketList.appendChild(empty);
+    return;
+  }
+
+  const kindLabels = { text: "文", url: "链", file: "件" };
+  for (const item of pocketItems) {
+    const row = document.createElement("div");
+    row.className = "pocket-row";
+    row.dataset.kind = item.kind;
+
+    const kind = document.createElement("span");
+    kind.className = "pocket-kind";
+    kind.textContent = kindLabels[item.kind];
+    kind.title = { text: "文字", url: "链接", file: "文件" }[item.kind];
+
+    const body = document.createElement("div");
+    body.className = "pocket-row-body";
+    const value = document.createElement("div");
+    value.className = "pocket-row-value";
+    value.textContent = pocketItemLabel(item);
+    value.title = item.value;
+
+    const meta = document.createElement("div");
+    meta.className = "pocket-row-meta";
+    meta.textContent = `${item.pinned ? "已固定 · " : ""}${formatMemoDue(item.updatedAt)}`;
+
+    const actions = document.createElement("div");
+    actions.className = "pocket-row-actions";
+    if (item.kind !== "text") {
+      actions.append(createPocketAction("↗", "打开", "open", item.id));
+    }
+    actions.append(
+      createPocketAction("⧉", "复制", "copy", item.id),
+      createPocketAction(
+        item.pinned ? "★" : "☆",
+        item.pinned ? "取消固定" : "固定",
+        "pin",
+        item.id,
+        item.pinned ? "pinned" : "",
+      ),
+      createPocketAction("×", "删除", "delete", item.id, "delete"),
+    );
+    body.append(value, meta, actions);
+    row.append(kind, body);
+    pocketList.appendChild(row);
+  }
+}
+
+function openPocketForm() {
+  pocketError.textContent = "";
+  pocketInput.value = "";
+  pocketForm.hidden = false;
+  pocketList.hidden = true;
+  setTimeout(() => pocketInput.focus(), 0);
+  void layoutContextMenu();
+}
+
+function closePocketForm() {
+  pocketForm.hidden = true;
+  pocketList.hidden = false;
+  pocketError.textContent = "";
+}
+
+function storePocketEntries(entries, announcement = "") {
+  try {
+    const nextItems = addPocketEntries(pocketItems, entries);
+    if (!replacePocketItems(nextItems)) throw new Error("保存失败，请重试");
+    if (announcement) showBubble(announcement, 2200);
+    return true;
+  } catch (error) {
+    pocketError.textContent = error.message || "收纳失败，请重试";
+    showBubble(pocketError.textContent, 2800);
+    return false;
+  }
+}
+
+function setPocketDropTarget(active) {
+  img.classList.toggle("pocket-drop-target", active);
+}
+
+async function registerPocketFileDrop() {
+  if (typeof win.onDragDropEvent !== "function") return;
+  await win.onDragDropEvent((event) => {
+    const payload = event.payload;
+    if (payload.type === "enter" || payload.type === "over") {
+      setPocketDropTarget(true);
+      return;
+    }
+    setPocketDropTarget(false);
+    if (payload.type !== "drop" || !payload.paths.length) return;
+    const paths = payload.paths.slice(0, 50);
+    storePocketEntries(
+      paths.map(value => ({ kind: "file", value })),
+      paths.length === 1 ? "已放进口袋" : `已收纳 ${paths.length} 个文件`,
+    );
+  });
+}
+
+pocketAdd.addEventListener("click", (event) => {
+  event.stopPropagation();
+  openPocketForm();
+});
+
+pocketCancel.addEventListener("click", (event) => {
+  event.stopPropagation();
+  closePocketForm();
+  void layoutContextMenu();
+});
+
+pocketForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  const value = pocketInput.value;
+  if (!storePocketEntries([{ kind: inferPocketKind(value), value }])) {
+    await layoutContextMenu();
+    return;
+  }
+  closePocketForm();
+  renderPocketList();
+  await layoutContextMenu();
+});
+
+pocketRetention.addEventListener("change", async () => {
+  pocketRetentionDays = normalizePocketRetentionDays(pocketRetention.value);
+  localStorage.setItem(POCKET_RETENTION_KEY, String(pocketRetentionDays));
+  replacePocketItems(pocketItems);
+  await layoutContextMenu();
+});
+
+pocketList.addEventListener("click", async (event) => {
+  event.stopPropagation();
+  const button = event.target.closest("button[data-pocket-action]");
+  if (!button) return;
+  const item = pocketItems.find(({ id }) => id === button.dataset.pocketId);
+  if (!item) return;
+
+  try {
+    switch (button.dataset.pocketAction) {
+      case "copy":
+        await navigator.clipboard.writeText(item.value);
+        button.textContent = "✓";
+        setTimeout(() => {
+          if (button.isConnected) button.textContent = "⧉";
+        }, 900);
+        return;
+      case "open":
+        await T.core.invoke("open_pocket_target", {
+          target: item.value,
+          kind: item.kind,
+        });
+        return;
+      case "pin":
+        replacePocketItems(togglePocketPinned(pocketItems, item.id));
+        break;
+      case "delete":
+        replacePocketItems(removePocketItem(pocketItems, item.id));
+        break;
+      default:
+        return;
+    }
+    await layoutContextMenu();
+  } catch (error) {
+    console.error("[pocket] action failed:", error);
+    showBubble(typeof error === "string" ? error : "操作失败，请重试", 2800);
+  }
+});
+
+// Windows reserves drag events for Tauri's native file paths; this fallback
+// collects text and links on WebViews that also expose HTML5 drag data.
+window.addEventListener("dragover", (event) => {
+  const transfer = event.dataTransfer;
+  if (!transfer) return;
+  event.preventDefault();
+  transfer.dropEffect = "copy";
+  setPocketDropTarget(true);
+});
+
+window.addEventListener("dragleave", (event) => {
+  if (event.relatedTarget === null) setPocketDropTarget(false);
+});
+
+window.addEventListener("drop", (event) => {
+  event.preventDefault();
+  setPocketDropTarget(false);
+  const transfer = event.dataTransfer;
+  if (!transfer || transfer.files.length) return;
+  const uri = transfer.getData("text/uri-list")
+    .split("\n")
+    .map(line => line.trim())
+    .find(line => line && !line.startsWith("#"));
+  const value = uri || transfer.getData("text/plain");
+  if (!value) return;
+  storePocketEntries(
+    [{ kind: inferPocketKind(value), value }],
+    "已放进口袋",
+  );
+});
+
 // ---------- manual drag ----------
 let dragging = false;
 let grab = { x: 0, y: 0 };
@@ -1116,6 +1396,7 @@ async function openMenu() {
   suspendKeyboard();
   await refreshMonitorBounds();
   pos = clampPetPosition(pos, size, bounds);
+  cleanExpiredPocketItems();
   ctxMenu.style.display = "block";
   ctxMenu.style.bottom = "auto";
   await layoutContextMenu();
@@ -1126,8 +1407,10 @@ async function closeMenu() {
   ctxMenu.style.display = "none";
   pomoPanel.style.display = "none";
   memoPanel.style.display = "none";
+  pocketPanel.style.display = "none";
   characterPanel.style.display = "none";
   closeMemoForm();
+  closePocketForm();
   document.getElementById("interactPanel").style.display = "none";
   menuOpen = false;
   if (activeMemo) {
@@ -1170,6 +1453,7 @@ ctxMenu.addEventListener("click", async (e) => {
   // actions that should NOT close the menu (they open sub-panels)
   const keepOpen = act === "pomodoro"
     || act === "memo"
+    || act === "pocket"
     || act === "character"
     || act === "interact";
   if (!keepOpen) await closeMenu();
@@ -1182,8 +1466,10 @@ ctxMenu.addEventListener("click", async (e) => {
         // toggle inline panel; keep menu open so user can interact with it
         const isOpen = pomoPanel.style.display === "block";
         memoPanel.style.display = "none";
+        pocketPanel.style.display = "none";
         characterPanel.style.display = "none";
         closeMemoForm();
+        closePocketForm();
         document.getElementById("interactPanel").style.display = "none";
         pomoPanel.style.display = isOpen ? "none" : "block";
         if (!isOpen) {
@@ -1203,11 +1489,29 @@ ctxMenu.addEventListener("click", async (e) => {
     case "memo": {
       const isMemoOpen = memoPanel.style.display === "block";
       pomoPanel.style.display = "none";
+      pocketPanel.style.display = "none";
       characterPanel.style.display = "none";
       document.getElementById("interactPanel").style.display = "none";
+      closePocketForm();
       closeMemoForm();
       memoPanel.style.display = isMemoOpen ? "none" : "block";
       if (!isMemoOpen) renderMemoList();
+      await layoutContextMenu();
+      break;
+    }
+    case "pocket": {
+      const isPocketOpen = pocketPanel.style.display === "block";
+      pomoPanel.style.display = "none";
+      memoPanel.style.display = "none";
+      characterPanel.style.display = "none";
+      document.getElementById("interactPanel").style.display = "none";
+      closeMemoForm();
+      closePocketForm();
+      pocketPanel.style.display = isPocketOpen ? "none" : "block";
+      if (!isPocketOpen) {
+        cleanExpiredPocketItems();
+        renderPocketList();
+      }
       await layoutContextMenu();
       break;
     }
@@ -1215,7 +1519,9 @@ ctxMenu.addEventListener("click", async (e) => {
       const isCharacterOpen = characterPanel.style.display === "block";
       pomoPanel.style.display = "none";
       memoPanel.style.display = "none";
+      pocketPanel.style.display = "none";
       closeMemoForm();
+      closePocketForm();
       document.getElementById("interactPanel").style.display = "none";
       characterPanel.style.display = isCharacterOpen ? "none" : "block";
       await layoutContextMenu();
@@ -1229,8 +1535,10 @@ ctxMenu.addEventListener("click", async (e) => {
       const panel = document.getElementById("interactPanel");
       pomoPanel.style.display = "none";
       memoPanel.style.display = "none";
+      pocketPanel.style.display = "none";
       characterPanel.style.display = "none";
       closeMemoForm();
+      closePocketForm();
       panel.style.display = panel.style.display === "none" ? "block" : "none";
       await layoutContextMenu();
       break;
@@ -1366,6 +1674,11 @@ async function init() {
   await refreshMonitorBounds(true);
   pos = defaultPetPosition(bounds, W());
   updateCharacterControls();
+  pocketRetention.value = String(pocketRetentionDays);
+  replacePocketItems(pocketItems);
+  await registerPocketFileDrop().catch((error) => {
+    console.error("[pocket] file drop listener failed:", error);
+  });
   await applySize();
   renderMemoCount();
   checkDueMemos();
@@ -1383,6 +1696,7 @@ async function init() {
   }
   setInterval(tick, TICK_MS);
   setInterval(checkDueMemos, 1000);
+  setInterval(cleanExpiredPocketItems, 60 * 60 * 1000);
   void initializeSocial().catch((error) => {
     console.error("[social] initialization failed:", error);
   });

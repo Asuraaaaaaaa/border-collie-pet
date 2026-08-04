@@ -614,6 +614,36 @@ test("keeps context-menu panels inside a stable Windows menu width", () => {
   assert.doesNotMatch(html, /(?:pomoPanel|memoPanel|interactPanel)" style=/);
 });
 
+test("provides a persistent pet pocket with desktop file drop support", () => {
+  const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
+  const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
+  const nativeMain = readFileSync(
+    new URL("../src-tauri/src/main.rs", import.meta.url),
+    "utf8",
+  );
+
+  for (const id of [
+    "pocketItem",
+    "pocketCount",
+    "pocketPanel",
+    "pocketRetention",
+    "pocketList",
+    "pocketForm",
+    "pocketInput",
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.match(pet, /localStorage\.getItem\(POCKET_STORAGE_KEY\)/);
+  assert.match(pet, /localStorage\.getItem\(POCKET_RETENTION_KEY\)/);
+  assert.match(pet, /win\.onDragDropEvent/);
+  assert.match(pet, /open_pocket_target/);
+  assert.match(nativeMain, /pocket::open_pocket_target/);
+  assert.match(
+    html,
+    /\.pomo-panel,[\s\S]*?\.pocket-panel,[\s\S]*?#interactPanel\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*100%/,
+  );
+});
+
 test("provides memo management and a persistent due reminder", () => {
   const html = readFileSync(new URL("../src/index.html", import.meta.url), "utf8");
   const pet = readFileSync(new URL("../src/pet.js", import.meta.url), "utf8");
